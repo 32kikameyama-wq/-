@@ -1,0 +1,88 @@
+{% extends base_template|default("layout.html") %}
+
+{% block title %}案件ボード - 案件管理システム{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <section class="board-header">
+        <h2>案件ボード</h2>
+        <p class="subtitle">案件の進捗を一覧で確認できます</p>
+    </section>
+
+    <section class="board-view">
+        <div class="board-columns">
+            <div class="board-column">
+                <h3>計画中</h3>
+                <div class="board-items">
+                    {% for project in projects %}
+                        {% if project.status == '計画中' %}
+                        <div class="board-item">
+                            <h4>{{ project.name }}</h4>
+                            <p>{{ project.client_name }}</p>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: {{ project.progress }}%"></div>
+                                <span class="progress-text">{{ project.progress }}%</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="board-column">
+                <h3>進行中</h3>
+                <div class="board-items">
+                    {% for project in projects %}
+                        {% if project.status == '進行中' %}
+                        <div class="board-item">
+                            <h4>{{ project.name }}</h4>
+                            <p>{{ project.client_name }}</p>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: {{ project.progress }}%"></div>
+                                <span class="progress-text">{{ project.progress }}%</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="board-column">
+                <h3>レビュー中</h3>
+                <div class="board-items">
+                    {% for project in projects %}
+                        {% if project.status == 'レビュー中' %}
+                        <div class="board-item">
+                            <h4>{{ project.name }}</h4>
+                            <p>{{ project.client_name }}</p>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: {{ project.progress }}%"></div>
+                                <span class="progress-text">{{ project.progress }}%</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="board-column">
+                <h3>完了</h3>
+                <div class="board-items">
+                    {% for project in projects %}
+                        {% if project.status == '完了' %}
+                        <div class="board-item">
+                            <h4>{{ project.name }}</h4>
+                            <p>{{ project.client_name }}</p>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: {{ project.progress }}%"></div>
+                                <span class="progress-text">{{ project.progress }}%</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+
+

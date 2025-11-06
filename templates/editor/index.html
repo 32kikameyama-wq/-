@@ -1,0 +1,152 @@
+{% extends "editor_layout.html" %}
+
+{% block title %}トップ - 編集者ポータル{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <section class="editor-dashboard-header">
+        <h2>今日の状況</h2>
+        <p class="subtitle">担当案件 {{ dashboard_data.total_assigned_projects }} 件 / 本日のタスク {{ dashboard_data.today_tasks_count }} 件</p>
+    </section>
+
+    <section class="editor-workspace-summary">
+        <div class="workspace-card">
+            <h3 class="workspace-title">{{ workspace.display_name }}</h3>
+            {% if workspace.description %}
+            <p class="workspace-description">{{ workspace.description }}</p>
+            {% endif %}
+            <p class="workspace-meta">作成: {{ workspace.created_at }} / 最終更新: {{ workspace.last_updated }}</p>
+        </div>
+        {% if workspace.workspace_preferences.show_quick_links and workspace.quick_links %}
+        <div class="workspace-card">
+            <h3 class="workspace-title">クイックリンク</h3>
+            <ul class="workspace-links">
+                {% for link in workspace.quick_links %}
+                <li>
+                    <a href="{{ link.url }}" class="workspace-link">{{ link.label }}</a>
+                    <span class="workspace-link-desc">{{ link.description }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        {% if workspace.workspace_preferences.show_pinned_notices and workspace.pinned_notices %}
+        <div class="workspace-card">
+            <h3 class="workspace-title">共有メモ</h3>
+            <ul class="workspace-notices">
+                {% for notice in workspace.pinned_notices %}
+                <li>
+                    <strong>{{ notice.title }}</strong>
+                    <p>{{ notice.body }}</p>
+                    <span class="notice-meta">更新日: {{ notice.updated_at }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </section>
+
+    <section class="editor-dashboard-grid">
+        <div class="dashboard-column">
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <h3>担当案件のステータス</h3>
+                </div>
+                <div class="card-body">
+                    <ul class="status-list">
+                        <li>進行中: {{ dashboard_data.status_counts.in_progress }} 件</li>
+                        <li>レビュー中: {{ dashboard_data.status_counts.review }} 件</li>
+                        <li>完了: {{ dashboard_data.status_counts.completed }} 件</li>
+                    </ul>
+                    <div class="next-deadline">
+                        <h4>直近の納期</h4>
+                        {% if dashboard_data.next_due_project %}
+                        <p>{{ dashboard_data.next_due_project.name }}（{{ dashboard_data.next_due_project.due_date }}）</p>
+                        {% else %}
+                        <p>直近の納期はありません</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <h3>担当案件一覧</h3>
+                    <a href="/editor/projects" class="show-all-link">すべて表示</a>
+                </div>
+                <div class="card-body table-body">
+                    <div class="projects-table-wrapper compact">
+                        <table class="projects-table">
+                            <thead>
+                                <tr>
+                                    <th>案件名</th>
+                                    <th>納期</th>
+                                    <th>ステータス</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for project in dashboard_data.assigned_projects %}
+                                <tr>
+                                    <td><a href="/editor/projects/{{ project.id }}" class="project-link">{{ project.name }}</a></td>
+                                    <td>{{ project.due_date }}</td>
+                                    <td><span class="status-badge status-{{ project.status }}">{{ project.status }}</span></td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="3" class="empty">担当案件はありません</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-column">
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <h3>今日のタスク</h3>
+                    <a href="/tasks" class="show-all-link">タスク一覧</a>
+                </div>
+                <div class="card-body">
+                    <ul class="tasks-list editor">
+                        {% for task in dashboard_data.today_tasks %}
+                        <li class="task-item">
+                            <div class="task-content">
+                                <p class="task-title">{{ task.title }}</p>
+                                <p class="task-meta">案件: {{ task.project_name }} / 期限: {{ task.due_date }}</p>
+                            </div>
+                            <span class="task-status status-{{ task.status }}">{{ task.status }}</span>
+                        </li>
+                        {% else %}
+                        <li class="task-item empty">本日のタスクはありません</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <h3>素材確認待ち</h3>
+                </div>
+                <div class="card-body">
+                    <ul class="assets-list">
+                        {% for asset in dashboard_data.pending_assets %}
+                        <li>
+                            <span class="asset-name">{{ asset.name }}</span>
+                            <span class="asset-project">({{ asset.project_name }})</span>
+                            <a href="{{ asset.url }}" target="_blank" class="btn-link-small">開く</a>
+                        </li>
+                        {% else %}
+                        <li class="empty">確認待ちの素材はありません</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+

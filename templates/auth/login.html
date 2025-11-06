@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ログイン - 案件管理システム</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="auth-body">
+    <div class="auth-container">
+        <div class="auth-card">
+            <h1 class="auth-title">案件管理システム</h1>
+            <p class="auth-subtitle">管理者・編集者・クライアントの共通ログイン</p>
+
+            {% if error %}
+            <div class="auth-alert auth-alert-error">{{ error }}</div>
+            {% endif %}
+
+            <form method="post" class="auth-form">
+                <input type="hidden" name="next" value="{{ next_url }}">
+
+                <div class="form-group">
+                    <label for="email">メールアドレス</label>
+                    <input type="email" id="email" name="email" required placeholder="admin@example.com">
+                </div>
+
+                <div class="form-group">
+                    <label for="password">パスワード</label>
+                    <input type="password" id="password" name="password" required placeholder="パスワードを入力">
+                </div>
+
+                <button type="submit" class="btn btn-primary auth-submit">ログイン</button>
+            </form>
+
+            <div class="auth-footer">
+                <span>テスト用アカウント: admin@example.com / adminpass</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+
+

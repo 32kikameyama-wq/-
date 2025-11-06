@@ -1,0 +1,308 @@
+{% extends base_template|default("layout.html") %}
+
+{% set project_list_endpoint = project_list_endpoint if project_list_endpoint is defined else 'projects' %}
+{% set back_to_list_url = back_url if back_url is defined else url_for(project_list_endpoint) %}
+{% set company_detail_endpoint = company_detail_endpoint if company_detail_endpoint is defined else 'company_detail' %}
+{% block title %}{{ project.name }} - 案件管理システム{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <section class="project-header-section">
+        <div class="back-link">
+            <a href="{{ back_to_list_url }}">← 案件一覧に戻る</a>
+        </div>
+        <h2>{{ project.name }}</h2>
+        <div class="project-meta">
+            <span class="status-badge status-{{ project.status }}">{{ project.status }}</span>
+            {% if company %}
+            <span class="meta-item">会社: <a href="{{ company_url if company_url is defined and company_url else url_for(company_detail_endpoint, company_id=company.id) }}">{{ company.name }}</a></span>
+            {% else %}
+            <span class="meta-item">会社: {{ project.client_name }}</span>
+            {% endif %}
+            <span class="meta-item">納期: {{ project.due_date }}</span>
+            {% if project.assignee %}
+            <span class="meta-item">動画担当: {{ project.assignee }}</span>
+            {% endif %}
+            {% if project.completion_length %}
+            <span class="meta-item">完成尺: {{ project.completion_length }}分</span>
+            {% endif %}
+            {% if project.delivery_date %}
+            <span class="meta-item">納品完了日: {{ project.delivery_date }}</span>
+            {% endif %}
+        </div>
+        <div class="progress-bar-large">
+            <div class="progress-fill" style="width: {{ project.progress }}%"></div>
+            <span class="progress-text">{{ project.progress }}%</span>
+        </div>
+    </section>
+
+    <!-- タブナビゲーション -->
+    <section class="project-tabs">
+        <div class="tab-buttons">
+            <button class="tab-button active" onclick="showTab('items')">アイテム</button>
+            <button class="tab-button" onclick="showTab('tasks')">タスク</button>
+            <button class="tab-button" onclick="showTab('assets')">素材</button>
+            <button class="tab-button" onclick="showTab('comments')">コメント</button>
+            <button class="tab-button" onclick="showTab('history')">履歴</button>
+        </div>
+    </section>
+
+    <!-- アイテムタブ（LONG/SHORT） -->
+    <section id="tab-items" class="tab-content active">
+        <div class="items-header">
+            <h3>動画アイテム（LONG/SHORT）</h3>
+            {% if allow_project_actions|default(True) %}
+            <button class="btn btn-small" onclick="addVideoItem()">アイテムを追加</button>
+            {% endif %}
+        </div>
+        <div class="items-list">
+            <div class="items-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>軸</th>
+                            <th>タイトル</th>
+                            <th>ステータス</th>
+                            <th>担当者</th>
+                            <th>計画開始日</th>
+                            <th>計画終了日</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in video_items %}
+                        <tr>
+                            <td><span class="axis-badge axis-{{ item.axis }}">{{ item.axis }}</span></td>
+                            <td>{{ item.title }}</td>
+                            <td><span class="status-badge status-{{ item.status }}">{{ item.status }}</span></td>
+                            <td>{{ item.assignee }}</td>
+                            <td>{{ item.planned_start }}</td>
+                            <td>{{ item.planned_end }}</td>
+                            <td>
+                                {% if allow_project_actions|default(True) %}
+                                <a href="#" class="btn-link btn-link-small">編集</a>
+                                {% else %}
+                                <span class="btn-link-small disabled">-</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 未解決ブロッカー -->
+        <div class="blockers-section">
+            <h3>未解決ブロッカー</h3>
+            {% if blockers %}
+            <div class="blockers-list">
+                {% for blocker in blockers %}
+                <div class="blocker-item">
+                    <span class="blocker-icon">⚠️</span>
+                    <span class="blocker-text">{{ blocker.text }}</span>
+                    <span class="blocker-date">{{ blocker.created_at }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="no-blockers">未解決のブロッカーはありません</p>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- タスクタブ -->
+    <section id="tab-tasks" class="tab-content">
+        <div class="tasks-header">
+            <h3>タスク一覧</h3>
+            {% if allow_project_actions|default(True) %}
+            <button class="btn btn-small" onclick="addTask()">タスクを追加</button>
+            {% endif %}
+        </div>
+        <div class="tasks-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>タスク名</th>
+                        <th>タイプ</th>
+                        <th>担当者</th>
+                        <th>優先度</th>
+                        <th>期限</th>
+                        <th>ステータス</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for task in tasks %}
+                    <tr>
+                        <td>{{ task.title }}</td>
+                        <td><span class="task-type">{{ task.type }}</span></td>
+                        <td>{{ task.assignee }}</td>
+                        <td>
+                            <span class="priority-badge priority-{{ task.priority or '中' }}">
+                                {{ task.priority or '中' }}
+                            </span>
+                        </td>
+                        <td>{{ task.due_date }}</td>
+                        <td><span class="status-badge status-{{ task.status }}">{{ task.status }}</span></td>
+                        <td>
+                            {% if allow_project_actions|default(True) %}
+                            <a href="#" class="btn-link btn-link-small">編集</a>
+                            {% else %}
+                            <span class="btn-link-small disabled">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- 素材タブ -->
+    <section id="tab-assets" class="tab-content">
+        <div class="assets-header">
+            <h3>素材・完成動画</h3>
+            {% if allow_project_actions|default(True) %}
+            <button class="btn btn-small" onclick="addAsset()">素材を追加</button>
+            {% endif %}
+        </div>
+        <div class="assets-list">
+            {% if project.raw_material_url %}
+            <div class="asset-item">
+                <h4>元素材</h4>
+                <p><a href="{{ project.raw_material_url }}" target="_blank" class="asset-link">{{ project.raw_material_url }}</a></p>
+            </div>
+            {% endif %}
+            {% if project.final_video_url %}
+            <div class="asset-item">
+                <h4>納品動画</h4>
+                <p><a href="{{ project.final_video_url }}" target="_blank" class="asset-link">{{ project.final_video_url }}</a></p>
+            </div>
+            {% endif %}
+            {% if assets %}
+            <div class="assets-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ファイル名</th>
+                            <th>種別</th>
+                            <th>バージョン</th>
+                            <th>アップロード者</th>
+                            <th>アップロード日</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for asset in assets %}
+                        <tr>
+                            <td>{{ asset.name }}</td>
+                            <td><span class="asset-kind">{{ asset.kind }}</span></td>
+                            <td>v{{ asset.version }}</td>
+                            <td>{{ asset.uploaded_by }}</td>
+                            <td>{{ asset.uploaded_at }}</td>
+                            <td>
+                                <a href="#" class="btn-link btn-link-small">表示</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+            {% if not project.raw_material_url and not project.final_video_url and not assets %}
+            <p>素材・完成動画のリンクはまだ登録されていません。</p>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- コメントタブ -->
+    <section id="tab-comments" class="tab-content">
+        <div class="comments-header">
+            <h3>コメント</h3>
+        </div>
+        <div class="comments-list">
+            {% for comment in comments %}
+            <div class="comment-item">
+                <div class="comment-header">
+                    <span class="comment-author">{{ comment.author }}</span>
+                    <span class="comment-date">{{ comment.created_at }}</span>
+                </div>
+                <div class="comment-content">{{ comment.content }}</div>
+            </div>
+            {% endfor %}
+            {% if not comments %}
+            <p>コメントはまだありません。</p>
+            {% endif %}
+        </div>
+        {% if allow_project_actions|default(True) %}
+        <div class="comment-form">
+            <textarea id="comment-text" placeholder="コメントを入力してください"></textarea>
+            <button class="btn btn-primary" onclick="addComment()">コメントを投稿</button>
+        </div>
+        {% endif %}
+    </section>
+
+    <!-- 履歴タブ -->
+    <section id="tab-history" class="tab-content">
+        <div class="history-header">
+            <h3>履歴</h3>
+        </div>
+        <div class="history-list">
+            {% for h in history %}
+            <div class="history-item">
+                <div class="history-action">{{ h.action }}</div>
+                <div class="history-meta">
+                    <span class="history-user">{{ h.user }}</span>
+                    <span class="history-date">{{ h.timestamp }}</span>
+                </div>
+            </div>
+            {% endfor %}
+            {% if not history %}
+            <p>履歴はまだありません。</p>
+            {% endif %}
+        </div>
+    </section>
+</div>
+
+<script>
+function showTab(tabName) {
+    // すべてのタブコンテンツを非表示
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // すべてのタブボタンからactiveクラスを削除
+    document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // 選択されたタブを表示
+    document.getElementById('tab-' + tabName).classList.add('active');
+    
+    // 選択されたタブボタンにactiveクラスを追加
+    event.target.classList.add('active');
+}
+
+function addVideoItem() {
+    alert('アイテム追加機能は実装予定です');
+}
+
+function addTask() {
+    alert('タスク追加機能は実装予定です');
+}
+
+function addAsset() {
+    alert('素材追加機能は実装予定です');
+}
+
+function addComment() {
+    const text = document.getElementById('comment-text').value;
+    if (!text.trim()) {
+        alert('コメントを入力してください');
+        return;
+    }
+    alert('コメント投稿機能は実装予定です');
+}
+</script>
+{% endblock %}

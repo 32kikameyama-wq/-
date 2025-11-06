@@ -1,0 +1,110 @@
+{% extends base_template|default("layout.html") %}
+
+{% block title %}素材管理 - 案件管理システム{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <section class="assets-header">
+        <div class="header-top">
+            <div>
+                <h2>素材管理</h2>
+                <p class="subtitle">全{{ assets|length }}件の素材</p>
+            </div>
+        </div>
+        <div class="filter-section">
+            <label for="project-filter" class="filter-label">案件で絞り込み:</label>
+            <select id="project-filter" class="project-filter" onchange="filterByProject()">
+                <option value="">すべての案件</option>
+                {% for project in projects %}
+                <option value="{{ project.name }}">{{ project.name }}</option>
+                {% endfor %}
+            </select>
+            <label for="kind-filter" class="filter-label">種別で絞り込み:</label>
+            <select id="kind-filter" class="kind-filter" onchange="filterByKind()">
+                <option value="">すべての種別</option>
+                <option value="raw">元素材</option>
+                <option value="final">完成動画</option>
+                <option value="script">台本</option>
+                <option value="other">その他</option>
+            </select>
+            <input type="text" id="search-input" class="search-input" placeholder="ファイル名で検索..." onkeyup="filterAssets()">
+        </div>
+    </section>
+
+    <section class="assets-list">
+        <div class="assets-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ファイル名</th>
+                        <th>案件名</th>
+                        <th>種別</th>
+                        <th>サイズ</th>
+                        <th>バージョン</th>
+                        <th>アップロード者</th>
+                        <th>アップロード日</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for asset in assets %}
+                    <tr class="asset-row" 
+                        data-project="{{ asset.project_name }}" 
+                        data-kind="{{ asset.kind }}"
+                        data-name="{{ asset.name }}">
+                        <td>{{ asset.name }}</td>
+                        <td>{{ asset.project_name }}</td>
+                        <td><span class="asset-kind">{{ asset.kind }}</span></td>
+                        <td>{{ asset.size }}</td>
+                        <td>v{{ asset.version }}</td>
+                        <td>{{ asset.uploaded_by }}</td>
+                        <td>{{ asset.uploaded_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+<script>
+function filterByProject() {
+    const filter = document.getElementById('project-filter').value.toLowerCase();
+    filterAssets();
+}
+
+function filterByKind() {
+    filterAssets();
+}
+
+function filterAssets() {
+    const projectFilter = document.getElementById('project-filter').value.toLowerCase();
+    const kindFilter = document.getElementById('kind-filter').value.toLowerCase();
+    const searchFilter = document.getElementById('search-input').value.toLowerCase();
+    
+    const rows = document.querySelectorAll('.asset-row');
+    let visibleCount = 0;
+    
+    rows.forEach(row => {
+        const project = row.getAttribute('data-project').toLowerCase();
+        const kind = row.getAttribute('data-kind').toLowerCase();
+        const name = row.getAttribute('data-name').toLowerCase();
+        
+        const matchProject = !projectFilter || project.includes(projectFilter);
+        const matchKind = !kindFilter || kind.includes(kindFilter);
+        const matchSearch = !searchFilter || name.includes(searchFilter);
+        
+        if (matchProject && matchKind && matchSearch) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    
+    // 表示件数を更新
+    document.querySelector('.subtitle').textContent = `全${visibleCount}件の素材`;
+}
+</script>
+{% endblock %}
+
+

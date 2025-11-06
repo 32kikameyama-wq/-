@@ -1,0 +1,292 @@
+{% extends base_template|default("layout.html") %}
+
+{% set detail_endpoint = project_detail_endpoint if project_detail_endpoint is defined else 'project_detail' %}
+{% block title %}案件一覧 - 案件管理システム{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <section class="projects-header">
+        <div class="header-top">
+            <div>
+                <h2>案件一覧</h2>
+                <p class="subtitle">全{{ projects|length }}件の案件</p>
+            </div>
+            {% if allow_project_actions|default(True) %}
+            <div class="header-actions">
+                <button class="btn btn-primary" onclick="addCompany()">新規会社を登録</button>
+            </div>
+            {% endif %}
+        </div>
+        <div class="filter-section">
+            <label for="company-filter" class="filter-label">会社で絞り込み:</label>
+            <select id="company-filter" class="company-filter" onchange="filterByCompany()">
+                <option value="">すべての会社</option>
+                {% for company in companies %}
+                <option value="{{ company.id }}" {% if request.args.get('company_id') == company.id|string %}selected{% endif %}>
+                    {{ company.name }}
+                </option>
+                {% endfor %}
+            </select>
+            <span id="filtered-count" class="filtered-count"></span>
+        </div>
+    </section>
+
+    <section class="projects-list">
+        <div class="projects-table-wrapper">
+            <table class="projects-table">
+                <thead>
+                    <tr>
+                        <th class="col-id">ID</th>
+                        <th class="col-company">会社</th>
+                        <th class="col-title">企画タイトル</th>
+                        <th class="col-due">納期</th>
+                        <th class="col-assignee">担当</th>
+                        <th class="col-status">ステータス</th>
+                        <th class="col-cl">CL</th>
+                        <th class="col-material">動画素材</th>
+                        <th class="col-final">完成動画</th>
+                        <th class="col-script">台本</th>
+                        <th class="col-delivery">納品完了日</th>
+                        <th class="col-action">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for project in projects %}
+                    <tr data-company-id="{{ project.company_id }}" data-project-id="{{ project.id }}">
+                        <td class="col-id">{{ project.id }}</td>
+                        <td class="col-company">{{ project.client_name }}</td>
+                        <td class="col-title">
+                            <a href="{{ url_for(detail_endpoint, project_id=project.id) }}">{{ project.name }}</a>
+                        </td>
+                        <td class="col-axis">
+                            <span class="axis-badge axis-{{ project.video_axis or 'LONG' }}">
+                                {{ project.video_axis or 'LONG' }}
+                            </span>
+                        </td>
+                        <td class="col-due">{{ project.due_date }}</td>
+                        <td class="col-assignee">{{ project.assignee }}</td>
+                        <td class="col-status">
+                            <select class="status-select" 
+                                    data-project-id="{{ project.id }}"
+                                    data-original-status="{{ project.status }}"
+                                    onchange="updateStatus({{ project.id }}, this.value, this)">
+                                <option value="計画中" {% if project.status == '計画中' %}selected{% endif %}>計画中</option>
+                                <option value="進行中" {% if project.status == '進行中' %}selected{% endif %}>進行中</option>
+                                <option value="レビュー中" {% if project.status == 'レビュー中' %}selected{% endif %}>レビュー中</option>
+                                <option value="完了" {% if project.status == '完了' %}selected{% endif %}>完了</option>
+                            </select>
+                        </td>
+                        <td class="col-cl">
+                            <label class="cl-checkbox-label">
+                                <input type="checkbox" class="cl-checkbox" 
+                                       data-project-id="{{ project.id }}" 
+                                       {% if project.delivered %}checked{% endif %}
+                                       onchange="toggleCL({{ project.id }}, this.checked)">
+                                <span class="check-icon-display"></span>
+                            </label>
+                        </td>
+                        <td class="col-material">
+                            {% if project.raw_material_url %}
+                            <a href="{{ project.raw_material_url }}" target="_blank" class="link-icon">🔗</a>
+                            {% else %}
+                            <span class="link-empty">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="col-final">
+                            {% if project.final_video_url %}
+                            <a href="{{ project.final_video_url }}" target="_blank" class="link-icon">🔗</a>
+                            {% else %}
+                            <span class="link-empty">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="col-script">
+                            <span class="script-empty">-</span>
+                        </td>
+                        <td class="col-delivery">{{ project.delivery_date if project.delivery_date else '-' }}</td>
+                        <td class="col-action">
+                            <div class="action-buttons">
+                                <a href="{{ url_for(detail_endpoint, project_id=project.id) }}" class="btn-link btn-link-small">詳細</a>
+                                {% if allow_project_actions|default(True) %}
+                                <button class="btn-link btn-link-small" onclick="editProject({{ project.id }})">編集</button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if allow_project_actions|default(True) %}
+        <div class="table-actions">
+            {% if request.args.get('company_id') %}
+            <button class="btn btn-primary" onclick="addProject({{ request.args.get('company_id') }})">新規案件を追加</button>
+            {% else %}
+            <button class="btn btn-primary" onclick="addProject()">新規案件を追加</button>
+            {% endif %}
+        </div>
+        {% endif %}
+    </section>
+</div>
+
+<script>
+// 会社一覧をグローバル変数に設定（JavaScriptで使用）
+window.companies = {{ companies|tojson }};
+function filterByCompany() {
+    const companyId = document.getElementById('company-filter').value;
+    const url = new URL(window.location);
+    
+    if (companyId) {
+        url.searchParams.set('company_id', companyId);
+    } else {
+        url.searchParams.delete('company_id');
+    }
+    
+    window.location.href = url.toString();
+}
+
+function updateFilteredCount() {
+    const companyId = document.getElementById('company-filter').value;
+    const table = document.querySelector('.projects-table tbody');
+    if (table) {
+        const rows = table.querySelectorAll('tr');
+        let visibleCount = 0;
+        
+        rows.forEach(row => {
+            if (companyId) {
+                const rowCompanyId = row.getAttribute('data-company-id');
+                if (rowCompanyId === companyId) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            } else {
+                row.style.display = '';
+                visibleCount++;
+            }
+        });
+        
+        const countElement = document.getElementById('filtered-count');
+        if (companyId && countElement) {
+            countElement.textContent = `（表示: ${visibleCount}件）`;
+        } else if (countElement) {
+            countElement.textContent = '';
+        }
+    }
+}
+
+// ページ読み込み時にフィルタリング
+document.addEventListener('DOMContentLoaded', function() {
+    updateFilteredCount();
+});
+
+// ステータスの更新
+function updateStatus(projectId, newStatus, selectElement) {
+    if (!selectElement) {
+        selectElement = document.querySelector(`.status-select[data-project-id="${projectId}"]`);
+    }
+    if (!selectElement) {
+        console.error('ステータス選択要素が見つかりません');
+        return;
+    }
+    
+    // 元の値を保存（エラー時に戻すため）
+    const originalStatus = selectElement.getAttribute('data-original-status');
+    
+    fetch(`/api/projects/${projectId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: newStatus })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.status === 'success') {
+            // 成功時は元の値を更新
+            selectElement.setAttribute('data-original-status', newStatus);
+            console.log('ステータスを更新しました');
+        } else {
+            alert('エラー: ' + result.message);
+            // ドロップダウンを元の値に戻す
+            selectElement.value = originalStatus;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('ステータスの更新中にエラーが発生しました。');
+        // ドロップダウンを元の値に戻す
+        selectElement.value = originalStatus;
+    });
+}
+
+// CLチェックボックスの切り替え
+function toggleCL(projectId, isChecked) {
+    fetch(`/api/projects/${projectId}/toggle-delivered`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ delivered: isChecked })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.status === 'success') {
+            // 完了日を画面に反映
+            const row = document.querySelector(`tr[data-project-id="${projectId}"]`) || 
+                       document.querySelector(`.cl-checkbox[data-project-id="${projectId}"]`)?.closest('tr');
+            
+            if (row) {
+                const deliveryCell = row.querySelector('.col-delivery');
+                if (deliveryCell) {
+                    if (isChecked && result.data.delivery_date) {
+                        deliveryCell.textContent = result.data.delivery_date;
+                    } else {
+                        deliveryCell.textContent = '-';
+                    }
+                }
+            }
+            
+            console.log('CL状態を更新しました');
+        } else {
+            alert('エラー: ' + result.message);
+            // チェックボックスを元に戻す
+            const checkbox = document.querySelector(`.cl-checkbox[data-project-id="${projectId}"]`);
+            if (checkbox) {
+                checkbox.checked = !isChecked;
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('CL状態の更新中にエラーが発生しました。');
+        // チェックボックスを元に戻す
+        const checkbox = document.querySelector(`.cl-checkbox[data-project-id="${projectId}"]`);
+        if (checkbox) {
+            checkbox.checked = !isChecked;
+        }
+    });
+}
+
+// 案件編集
+function editProject(projectId) {
+    // 案件データを取得
+    fetch(`/api/projects/${projectId}`)
+        .then(response => response.json())
+        .then(result => {
+            if (result.status === 'success') {
+                const project = result.data;
+                showEditProjectForm(project);
+            } else {
+                alert('案件データの取得に失敗しました。');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('案件データの取得中にエラーが発生しました。');
+        });
+}
+</script>
+{% endblock %}
+
+

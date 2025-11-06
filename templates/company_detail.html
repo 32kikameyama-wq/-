@@ -1,0 +1,150 @@
+{% extends base_template|default("layout.html") %}
+
+{% set company_list_endpoint = company_list_endpoint if company_list_endpoint is defined else 'companies' %}
+{% set project_detail_endpoint = project_detail_endpoint if project_detail_endpoint is defined else 'project_detail' %}
+{% set company_list_url = back_url if back_url is defined else url_for(company_list_endpoint) %}
+{% block title %}{{ company.name }} - 案件管理システム{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <section class="company-header-section">
+        <div class="back-link">
+            <a href="{{ company_list_url }}">← 会社一覧に戻る</a>
+        </div>
+        <h2>{{ company.name }}</h2>
+        <div class="company-meta">
+            <span class="company-code">{{ company.code }}</span>
+            <span class="meta-item">案件数: {{ company.projects|length }}件</span>
+        </div>
+    </section>
+
+    <section class="company-projects">
+        <h3>案件一覧</h3>
+        <div class="projects-table-wrapper">
+            <table class="projects-table">
+                <thead>
+                    <tr>
+                        <th class="col-id">ID</th>
+                        <th class="col-title">企画タイトル</th>
+                        <th class="col-due">納期</th>
+                        <th class="col-assignee">担当</th>
+                        <th class="col-cl">CL</th>
+                        <th class="col-material">動画素材</th>
+                        <th class="col-final">完成動画</th>
+                        <th class="col-script">台本</th>
+                        <th class="col-delivery">納品完了日</th>
+                        <th class="col-action">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for project in company.projects %}
+                    <tr>
+                        <td class="col-id">{{ project.id }}</td>
+                        <td class="col-title">
+                            <a href="{{ url_for(project_detail_endpoint, project_id=project.id) }}">{{ project.name }}</a>
+                        </td>
+                        <td class="col-due">{{ project.due_date }}</td>
+                        <td class="col-assignee">{{ project.assignee }}</td>
+                        <td class="col-cl">
+                            <label class="cl-checkbox-label">
+                                <input type="checkbox" class="cl-checkbox" 
+                                       data-project-id="{{ project.id }}" 
+                                       {% if project.delivered %}checked{% endif %}
+                                       onchange="toggleCL({{ project.id }}, this.checked)">
+                                <span class="check-icon-display"></span>
+                            </label>
+                        </td>
+                        <td class="col-material">
+                            {% if project.raw_material_url %}
+                            <a href="{{ project.raw_material_url }}" target="_blank" class="link-icon">🔗</a>
+                            {% else %}
+                            <span class="link-empty">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="col-final">
+                            {% if project.final_video_url %}
+                            <a href="{{ project.final_video_url }}" target="_blank" class="link-icon">🔗</a>
+                            {% else %}
+                            <span class="link-empty">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="col-script">
+                            <span class="script-empty">-</span>
+                        </td>
+                        <td class="col-delivery">{{ project.delivery_date if project.delivery_date else '-' }}</td>
+                        <td class="col-action">
+                            <div class="action-buttons">
+                                <a href="{{ url_for(project_detail_endpoint, project_id=project.id) }}" class="btn-link btn-link-small">詳細</a>
+                                {% if allow_company_actions|default(True) %}
+                                <button class="btn-link btn-link-small" onclick="editProject({{ project.id }})">編集</button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if allow_company_actions|default(True) %}
+        <div class="table-actions">
+            <button class="btn btn-primary" onclick="addProject({{ company.id }})">新規案件を追加</button>
+        </div>
+        {% endif %}
+    </section>
+</div>
+
+<script>
+// 会社一覧をグローバル変数に設定（JavaScriptで使用）
+window.companies = [{{ company|tojson }}];
+
+// CLチェックボックスの切り替え
+function toggleCL(projectId, isChecked) {
+    fetch(`/api/projects/${projectId}/toggle-delivered`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ delivered: isChecked })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.status === 'success') {
+            console.log('CL状態を更新しました');
+        } else {
+            alert('エラー: ' + result.message);
+            const checkbox = document.querySelector(`.cl-checkbox[data-project-id="${projectId}"]`);
+            if (checkbox) {
+                checkbox.checked = !isChecked;
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('CL状態の更新中にエラーが発生しました。');
+        const checkbox = document.querySelector(`.cl-checkbox[data-project-id="${projectId}"]`);
+        if (checkbox) {
+            checkbox.checked = !isChecked;
+        }
+    });
+}
+
+// 案件編集
+function editProject(projectId) {
+    fetch(`/api/projects/${projectId}`)
+        .then(response => response.json())
+        .then(result => {
+            if (result.status === 'success') {
+                const project = result.data;
+                showEditProjectForm(project);
+            } else {
+                alert('案件データの取得に失敗しました。');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('案件データの取得中にエラーが発生しました。');
+        });
+}
+</script>
+{% endblock %}
+

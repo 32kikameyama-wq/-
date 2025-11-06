@@ -1,0 +1,76 @@
+{% extends base_template|default("layout.html") %}
+
+{% set company_detail_endpoint = company_detail_endpoint if company_detail_endpoint is defined else 'company_detail' %}
+{% block title %}会社一覧 - 案件管理システム{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <section class="companies-header">
+        <div class="header-top">
+            <div>
+                <h2>会社一覧</h2>
+                <p class="subtitle">全{{ companies|length }}社</p>
+            </div>
+            {% if allow_company_actions|default(True) %}
+            <div class="header-actions">
+                <button class="btn btn-primary" onclick="addCompany()">新規会社を登録</button>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="companies-list">
+        <div class="projects-table-wrapper">
+            <table class="projects-table">
+                <thead>
+                    <tr>
+                        <th class="col-id">ID</th>
+                        <th class="col-company">会社名</th>
+                        <th class="col-code">会社コード</th>
+                        <th class="col-projects">案件数</th>
+                        <th class="col-active">進行中</th>
+                        <th class="col-completed">完了</th>
+                        <th class="col-assignees">担当者</th>
+                        <th class="col-action">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for company in companies %}
+                    <tr>
+                        <td class="col-id">{{ company.id }}</td>
+                        <td class="col-company">
+                            <a href="{{ url_for(company_detail_endpoint, company_id=company.id) }}">{{ company.name }}</a>
+                        </td>
+                        <td class="col-code">{{ company.code }}</td>
+                        <td class="col-projects">{{ company.projects|length }}件</td>
+                        <td class="col-active">
+                            {% set active_count = company.projects|selectattr('status', 'in', ['進行中', 'レビュー中'])|list|length %}
+                            {{ active_count }}件
+                        </td>
+                        <td class="col-completed">
+                            {% set completed_count = company.projects|selectattr('status', 'equalto', '完了')|list|length %}
+                            {{ completed_count }}件
+                        </td>
+                        <td class="col-assignees">
+                            {% set assignees = [] %}
+                            {% for project in company.projects %}
+                                {% if project.assignee and project.assignee not in assignees %}
+                                    {% set _ = assignees.append(project.assignee) %}
+                                {% endif %}
+                            {% endfor %}
+                            {{ assignees|join(', ') if assignees else '-' }}
+                        </td>
+                        <td class="col-action">
+                            <div class="action-buttons">
+                                <a href="{{ url_for(company_detail_endpoint, company_id=company.id) }}" class="btn-link btn-link-small">詳細</a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}
+

@@ -1,0 +1,269 @@
+{% extends "layout.html" %}
+
+{% block title %}タスク作成 - 案件管理システム{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <section class="tasks-header">
+        <div class="header-top">
+            <div class="header-actions">
+                <button class="btn btn-primary" onclick="addTask()">新規タスクを追加</button>
+            </div>
+        </div>
+        <div class="filter-section">
+            <label for="status-filter" class="filter-label">ステータスで絞り込み:</label>
+            <select id="status-filter" class="status-filter" onchange="filterByStatus()">
+                <option value="">すべてのステータス</option>
+                <option value="未着手">未着手</option>
+                <option value="進行中">進行中</option>
+                <option value="待機中">待機中</option>
+                <option value="完了">完了</option>
+            </select>
+            <label for="priority-filter" class="filter-label">優先度で絞り込み:</label>
+            <select id="priority-filter" class="priority-filter" onchange="filterByPriority()">
+                <option value="">すべての優先度</option>
+                <option value="高">高</option>
+                <option value="中">中</option>
+                <option value="低">低</option>
+            </select>
+            <input type="text" id="search-input" class="search-input" placeholder="タスク名で検索..." onkeyup="filterTasks()">
+            <span id="filtered-count" class="filtered-count"></span>
+        </div>
+    </section>
+
+    <section class="tasks-list">
+        <div class="projects-table-wrapper">
+            <table class="projects-table">
+                <thead>
+                    <tr>
+                        <th class="col-id">ID</th>
+                        <th class="col-title">タスク名</th>
+                        <th class="col-company">案件名</th>
+                        <th class="col-assignee">タイプ</th>
+                        <th class="col-assignee">担当者</th>
+                        <th class="col-due">優先度</th>
+                        <th class="col-due">期限</th>
+                        <th class="col-status">ステータス</th>
+                        <th class="col-due">進捗</th>
+                        <th class="col-action">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for task in tasks[:10] %}
+                    <tr data-task-id="{{ task.id }}" 
+                        class="task-row" 
+                        data-status="{{ task.status }}" 
+                        data-priority="{{ task.priority }}"
+                        data-title="{{ task.title }}">
+                        <td class="col-id">{{ task.id }}</td>
+                        <td class="col-title">{{ task.title }}</td>
+                        <td class="col-company">
+                            <a href="/projects/{{ task.project_id or '' }}" class="project-link">{{ task.project_name }}</a>
+                        </td>
+                        <td class="col-assignee"><span class="task-type">{{ task.type }}</span></td>
+                        <td class="col-assignee">{{ task.assignee }}</td>
+                        <td class="col-due">
+                            <span class="priority-badge priority-{{ task.priority }}">
+                                {{ task.priority }}
+                            </span>
+                        </td>
+                        <td class="col-due">
+                            <span class="due-date {% if task.status != '完了' and task.due_date and task.due_date < today %}overdue{% endif %}">
+                                {{ task.due_date }}
+                            </span>
+                        </td>
+                        <td class="col-status">
+                            <select class="status-select quick-update" data-task-id="{{ task.id }}" onchange="updateTaskStatus({{ task.id }}, this.value)">
+                                <option value="未着手" {% if task.status == '未着手' %}selected{% endif %}>未着手</option>
+                                <option value="進行中" {% if task.status == '進行中' %}selected{% endif %}>進行中</option>
+                                <option value="待機中" {% if task.status == '待機中' %}selected{% endif %}>待機中</option>
+                                <option value="完了" {% if task.status == '完了' %}selected{% endif %}>完了</option>
+                            </select>
+                        </td>
+                        <td class="col-due">
+                            <div class="progress-control">
+                                <input type="number" class="progress-input quick-update" 
+                                       data-task-id="{{ task.id }}" 
+                                       value="{{ task.progress or 0 }}" 
+                                       min="0" 
+                                       max="100" 
+                                       onchange="updateTaskProgress({{ task.id }}, this.value)"
+                                       style="width: 50px; padding: 2px 4px; font-size: 0.85em;">
+                                <span style="font-size: 0.85em;">%</span>
+                            </div>
+                        </td>
+                        <td class="col-action">
+                            <div class="action-buttons">
+                                <a href="/projects/{{ task.project_id or '' }}" class="btn-link btn-link-small">案件</a>
+                                <button class="btn-link btn-link-small" onclick="editTask({{ task.id }})">編集</button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if tasks|length > 0 and tasks|length < 10 %}
+                    {% for i in range(10 - tasks|length) %}
+                    <tr class="empty-row">
+                        <td colspan="10">&nbsp;</td>
+                    </tr>
+                    {% endfor %}
+                    {% endif %}
+                    {% if tasks|length == 0 %}
+                    <tr class="no-tasks-row">
+                        <td colspan="10" style="text-align: center; padding: 40px; color: #666; font-style: italic;">タスクがありません</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+        {% if tasks|length > 0 %}
+        <div class="tasks-footer">
+            {% set displayed_count = tasks|length if tasks|length <= 10 else 10 %}
+            {% set remaining_count = tasks|length - displayed_count %}
+            <div class="tasks-count">
+                <span class="displayed-count">{{ displayed_count }}件</span>
+                {% if remaining_count > 0 %}
+                <span class="remaining-count">+ {{ remaining_count }}件</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </section>
+</div>
+
+<script>
+// タスクのステータス更新
+function updateTaskStatus(taskId, status) {
+    fetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            status: status
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            console.log('タスクステータスを更新しました');
+            // 行のdata-status属性を更新
+            const row = document.querySelector(`tr[data-task-id="${taskId}"]`);
+            if (row) {
+                row.setAttribute('data-status', status);
+            }
+        } else {
+            alert('エラー: ' + data.message);
+            location.reload();
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('エラーが発生しました');
+        location.reload();
+    });
+}
+
+// タスクの進捗更新
+function updateTaskProgress(taskId, progress) {
+    fetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            progress: parseInt(progress)
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            console.log('タスク進捗を更新しました');
+        } else {
+            alert('エラー: ' + data.message);
+            location.reload();
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('エラーが発生しました');
+        location.reload();
+    });
+}
+
+// ステータスでフィルタ
+function filterByStatus() {
+    filterTasks();
+}
+
+// 優先度でフィルタ
+function filterByPriority() {
+    filterTasks();
+}
+
+// タスクをフィルタリング
+function filterTasks() {
+    const statusFilter = document.getElementById('status-filter').value;
+    const priorityFilter = document.getElementById('priority-filter').value;
+    const searchFilter = document.getElementById('search-input').value.toLowerCase();
+    
+    const rows = document.querySelectorAll('.task-row');
+    let visibleCount = 0;
+    
+    rows.forEach(row => {
+        const status = row.getAttribute('data-status');
+        const priority = row.getAttribute('data-priority');
+        const title = row.getAttribute('data-title').toLowerCase();
+        
+        const matchStatus = !statusFilter || status === statusFilter;
+        const matchPriority = !priorityFilter || priority === priorityFilter;
+        const matchSearch = !searchFilter || title.includes(searchFilter);
+        
+        if (matchStatus && matchPriority && matchSearch) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    
+    // 表示件数を更新（テーブル下の件数表示）
+    const tasksFooter = document.querySelector('.tasks-footer');
+    if (tasksFooter) {
+        const displayedCount = Math.min(visibleCount, 10);
+        const remainingCount = Math.max(0, visibleCount - 10);
+        
+        const countElement = tasksFooter.querySelector('.tasks-count');
+        if (countElement) {
+            countElement.innerHTML = `<span class="displayed-count">${displayedCount}件</span>` + 
+                (remainingCount > 0 ? `<span class="remaining-count">+ ${remainingCount}件</span>` : '');
+        }
+    }
+    
+    // フィルタ件数を表示
+    const filteredCount = document.getElementById('filtered-count');
+    if (filteredCount) {
+        const totalTasks = {{ tasks|length }};
+        if (visibleCount < totalTasks) {
+            filteredCount.textContent = `（表示: ${visibleCount}件）`;
+        } else {
+            filteredCount.textContent = '';
+        }
+    }
+}
+
+// タスクを追加
+function addTask() {
+    alert('タスク追加機能は実装予定です');
+}
+
+// タスクを編集
+function editTask(taskId) {
+    alert('タスク編集機能は実装予定です');
+}
+
+// 今日の日付を取得（期限超過の判定用）
+const today = new Date().toISOString().split('T')[0];
+</script>
+{% endblock %}
+
+

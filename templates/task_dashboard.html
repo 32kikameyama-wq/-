@@ -1,0 +1,258 @@
+{% extends "layout.html" %}
+
+{% block title %}タスク管理ダッシュボード - 案件管理システム{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <section class="task-dashboard-header">
+        <h2>ダッシュボード</h2>
+    </section>
+
+    <section class="task-dashboard-grid">
+        <!-- 左カラム -->
+        <div class="dashboard-column left-column">
+            <!-- 個人パフォーマンスセクション -->
+            <div class="dashboard-card performance-card">
+                <h3>個人パフォーマンス</h3>
+                <div class="performance-metrics">
+                    <div class="metric-card">
+                        <div class="metric-value">{{ dashboard_data.today_total }}</div>
+                        <div class="metric-label">今日のタスク</div>
+                    </div>
+                    <div class="metric-card completed">
+                        <div class="metric-value">{{ dashboard_data.today_completed }}</div>
+                        <div class="metric-label">完了タスク</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">{{ "%.1f"|format(dashboard_data.today_progress) }}%</div>
+                        <div class="metric-label">完了率</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">{{ dashboard_data.consecutive_days }}日</div>
+                        <div class="metric-label">連続達成</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 進捗分析セクション -->
+            <div class="dashboard-card progress-analysis-card">
+                <h3>進捗分析</h3>
+                
+                <div class="progress-section">
+                    <h4>本日の進捗</h4>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-fill" style="width: {{ dashboard_data.today_progress }}%"></div>
+                    </div>
+                    <div class="progress-text">{{ "%.1f"|format(dashboard_data.today_progress) }}% ({{ dashboard_data.today_completed }}/{{ dashboard_data.today_total }})</div>
+                </div>
+
+                <div class="task-summary">
+                    <div class="summary-item completed">
+                        <span class="summary-label">完了済み</span>
+                        <span class="summary-value">{{ dashboard_data.today_completed }}件</span>
+                    </div>
+                    <div class="summary-item remaining">
+                        <span class="summary-label">残り</span>
+                        <span class="summary-value">{{ dashboard_data.today_remaining }}件</span>
+                    </div>
+                </div>
+
+                <div class="chart-section">
+                    <h4>過去7日間の完了タスク数</h4>
+                    <canvas id="progressChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右カラム -->
+        <div class="dashboard-column right-column">
+            <!-- 今日のタスクセクション -->
+            <div class="dashboard-card today-tasks-card">
+                <div class="card-header">
+                    <h3>今日のタスク ({{ dashboard_data.today_total }}件)</h3>
+                    <a href="/tasks" class="show-all-link">すべて表示</a>
+                </div>
+                <div class="tasks-list">
+                    {% for task in today_tasks[:3] %}
+                    <div class="task-item">
+                        <div class="task-checkbox">
+                            <input type="checkbox" {% if task.status == '完了' %}checked{% endif %} onchange="toggleTaskComplete({{ task.id }}, this.checked)">
+                        </div>
+                        <div class="task-content">
+                            <div class="task-title">{{ task.title }}</div>
+                            <div class="task-meta">
+                                <span class="task-priority priority-{{ task.priority }}">{{ task.priority }}</span>
+                                <span class="task-timer">00:00:00</span>
+                            </div>
+                        </div>
+                        <div class="task-actions">
+                            <button class="task-arrow up" onclick="moveTaskUp({{ task.id }})">↑</button>
+                            <button class="task-arrow down" onclick="moveTaskDown({{ task.id }})">↓</button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% if today_tasks|length == 0 %}
+                    <div class="no-tasks">今日のタスクはありません</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 時間分析セクション -->
+            <div class="dashboard-card time-analysis-card">
+                <h3>時間分析</h3>
+                
+                <div class="work-time-section">
+                    <h4>本日の総作業時間</h4>
+                    <div class="work-time-display">
+                        <span class="clock-icon">🕐</span>
+                        <span class="work-time-value">{{ dashboard_data.today_work_time }}</span>
+                    </div>
+                    <div class="work-time-label">本日の総作業時間</div>
+                </div>
+
+                <div class="chart-section">
+                    <h4>優先度別タスク数</h4>
+                    <canvas id="priorityChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script>
+function toggleTaskComplete(taskId, isComplete) {
+    // タスクの完了状態を更新
+    fetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            status: isComplete ? '完了' : '進行中'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            location.reload();
+        } else {
+            alert('エラー: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('エラーが発生しました');
+    });
+}
+
+function moveTaskUp(taskId) {
+    // タスクの順序を上に移動
+    console.log('Move task up:', taskId);
+}
+
+function moveTaskDown(taskId) {
+    // タスクの順序を下に移動
+    console.log('Move task down:', taskId);
+}
+</script>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+window.addEventListener('load', function() {
+    // Chart.jsが読み込まれているか確認
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js is not loaded');
+        return;
+    }
+
+    // 過去7日間の完了タスク数グラフ
+    const progressCtx = document.getElementById('progressChart');
+    if (progressCtx) {
+        const past7Days = {{ dashboard_data.past_7_days|tojson }};
+        
+        new Chart(progressCtx, {
+            type: 'line',
+            data: {
+                labels: past7Days.map(d => d.date),
+                datasets: [{
+                    label: '完了タスク数',
+                    data: past7Days.map(d => d.count),
+                    borderColor: '#51cf66',
+                    backgroundColor: 'rgba(81, 207, 102, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // 優先度別タスク数グラフ
+    const priorityCtx = document.getElementById('priorityChart');
+    if (priorityCtx) {
+        new Chart(priorityCtx, {
+            type: 'bar',
+            data: {
+                labels: ['高', '中', '低'],
+                datasets: [{
+                    label: 'タスク数',
+                    data: [
+                        {{ dashboard_data.high_priority }},
+                        {{ dashboard_data.medium_priority }},
+                        {{ dashboard_data.low_priority }}
+                    ],
+                    backgroundColor: [
+                        '#dc3545',
+                        '#ffc107',
+                        '#51cf66'
+                    ],
+                    borderColor: [
+                        '#c82333',
+                        '#e0a800',
+                        '#2f9e44'
+                    ],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
+

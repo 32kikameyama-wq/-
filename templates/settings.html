@@ -1,0 +1,222 @@
+{% extends "layout.html" %}
+
+{% block title %}設定 - 案件管理システム{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <section class="settings-header">
+        <h2>設定</h2>
+        <p>システム設定を管理します。</p>
+    </section>
+
+    {% if workspace_updated %}
+    <div class="alert success-message workspace-update-message">
+        編集者共有ページの共通設定を更新しました。
+    </div>
+    {% endif %}
+
+    <section class="workspace-settings-section">
+        <h3>編集者共有ページ（共有設定）</h3>
+        <p class="section-description">ベースとなる共有パーツを編集すると、既存の編集者ページにも反映されます。</p>
+
+        {% if current_user and current_user.role == 'admin' %}
+        <form method="post" action="{{ url_for('update_editor_workspace_settings') }}" class="workspace-settings-form">
+            <div class="form-group">
+                <label for="workspace-description">ページ説明（共有）</label>
+                <textarea id="workspace-description" name="workspace_description" rows="3">{{ editor_settings.description }}</textarea>
+            </div>
+
+            <div class="workspace-toggle-grid">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="show_quick_links" {% if editor_settings.show_quick_links %}checked{% endif %}>
+                    <span>クイックリンクを表示する</span>
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" name="show_pinned_notices" {% if editor_settings.show_pinned_notices %}checked{% endif %}>
+                    <span>共有メモを表示する</span>
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label for="quick-links">クイックリンク一覧</label>
+                <textarea id="quick-links" name="quick_links" rows="5">{{ editor_workspace_quick_links }}</textarea>
+                <small class="form-text">1行に1リンクを「タイトル | URL | 説明」の形式で入力してください。</small>
+            </div>
+
+            <div class="form-group">
+                <label for="pinned-notices">共有メモ</label>
+                <textarea id="pinned-notices" name="pinned_notices" rows="4">{{ editor_workspace_notices }}</textarea>
+                <small class="form-text">1行に1メモを「タイトル | 本文」の形式で入力してください（本文は任意）。</small>
+            </div>
+
+            <div class="workspace-settings-footer">
+                <span class="last-updated">最終更新: {{ editor_settings.updated_at }}</span>
+                <button type="submit" class="btn btn-primary">共有設定を保存</button>
+            </div>
+        </form>
+        {% else %}
+        <div class="workspace-settings-readonly">
+            <p><strong>ページ説明:</strong> {{ editor_settings.description or '設定されていません' }}</p>
+            <p><strong>クイックリンク:</strong></p>
+            <ul class="workspace-links">
+                {% for link in editor_settings.quick_links %}
+                <li>
+                    <span class="workspace-link">{{ link.label }}</span>
+                    <span class="workspace-link-desc">{{ link.description }}（{{ link.url }}）</span>
+                </li>
+                {% else %}
+                <li>登録されているリンクはありません。</li>
+                {% endfor %}
+            </ul>
+            <p><strong>共有メモ:</strong></p>
+            <ul class="workspace-notices">
+                {% for notice in editor_settings.pinned_notices %}
+                <li>
+                    <strong>{{ notice.title }}</strong>
+                    <p>{{ notice.body }}</p>
+                    <span class="notice-meta">更新日: {{ notice.updated_at }}</span>
+                </li>
+                {% else %}
+                <li>共有メモはありません。</li>
+                {% endfor %}
+            </ul>
+            <p class="last-updated">最終更新: {{ editor_settings.updated_at }}</p>
+        </div>
+        {% endif %}
+    </section>
+
+    <section class="rate-table-section">
+        <h3>レート表</h3>
+        <div class="rate-table-wrapper">
+            <table class="rate-table">
+                <thead>
+                    <tr>
+                        <th>受諾プラン</th>
+                        <th>担当業務</th>
+                        <th>ブロンズ</th>
+                        <th>シルバー</th>
+                        <th>ゴールド</th>
+                        <th>請求タイミング</th>
+                        <th>評価基準</th>
+                        <th>備考</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rate in rate_table %}
+                    <tr>
+                        <td>{{ rate.plan }}</td>
+                        <td>{{ rate.task }}</td>
+                        <td>¥{{ "{:,}".format(rate.bronze) }}</td>
+                        <td>¥{{ "{:,}".format(rate.silver) }}</td>
+                        <td>¥{{ "{:,}".format(rate.gold) }}</td>
+                        <td>{{ rate.billing_timing }}</td>
+                        <td>{{ rate.evaluation_criteria }}</td>
+                        <td>{{ rate.notes }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="settings-list">
+        <div class="setting-card">
+            <h3>データインポート</h3>
+            <p>スプレッドシートからエクスポートしたCSVファイルをアップロードして、全データを引き継ぎます。</p>
+            <div class="csv-import-section">
+                <form id="csv-import-form" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="csv-file">CSVファイルを選択</label>
+                        <input type="file" id="csv-file" name="csv_file" accept=".csv" required>
+                        <small class="form-text">対応形式: 案件管理シート、動画編集管理シート</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="import-type">インポートタイプ</label>
+                        <select id="import-type" name="import_type" required>
+                            <option value="projects">案件管理シート（納期、ID、企画タイトル、担当、CL✔、元素材、納品動画、台本、納品完了日）</option>
+                            <option value="video_editing">動画編集管理シート（納期、ID、企画タイトル、完成尺、担当、納品済、元素材、納品動画、画面キャプチャ素材、完パケ）</option>
+                            <option value="projects_alt">案件管理シート（別形式：ID、企画タイトル、納期、担当、CL✔、動画素材、完成動画、台本、納品完了日、支払い済）</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">CSVをインポート</button>
+                </form>
+                <div id="import-result" class="import-result" style="display: none;"></div>
+            </div>
+        </div>
+        <div class="setting-card">
+            <h3>ユーザー管理</h3>
+            <p>ユーザーの追加・編集・削除を行います。</p>
+            <button class="btn btn-primary">設定画面を開く</button>
+        </div>
+        <div class="setting-card">
+            <h3>システム設定</h3>
+            <p>システム全般の設定を行います。</p>
+            <button class="btn btn-primary">設定画面を開く</button>
+        </div>
+    </section>
+</div>
+
+<script>
+document.getElementById('csv-import-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData();
+    const fileInput = document.getElementById('csv-file');
+    const importType = document.getElementById('import-type').value;
+    
+    if (!fileInput.files[0]) {
+        alert('CSVファイルを選択してください');
+        return;
+    }
+    
+    formData.append('csv_file', fileInput.files[0]);
+    formData.append('import_type', importType);
+    
+    const resultDiv = document.getElementById('import-result');
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = '<p>インポート中...</p>';
+    
+    try {
+        const response = await fetch('/api/import/csv', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            resultDiv.innerHTML = `
+                <div class="success-message">
+                    <h4>インポート成功</h4>
+                    <p>${result.message}</p>
+                    <ul>
+                        <li>インポート件数: ${result.data.imported_count}件</li>
+                        <li>スキップ件数: ${result.data.skipped_count}件</li>
+                    </ul>
+                </div>
+            `;
+            // ページをリロードしてデータを反映
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } else {
+            resultDiv.innerHTML = `
+                <div class="error-message">
+                    <h4>インポートエラー</h4>
+                    <p>${result.message}</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `
+            <div class="error-message">
+                <h4>エラーが発生しました</h4>
+                <p>${error.message}</p>
+            </div>
+        `;
+    }
+});
+</script>
+{% endblock %}
+
+

@@ -1,0 +1,85 @@
+{% extends "layout.html" %}
+
+{% block title %}請求・収支 - 案件管理システム{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <section class="finance-summary">
+        <h2>収支サマリ</h2>
+        <div class="finance-stats">
+            <div class="finance-stat-card">
+                <div class="finance-stat-label">総売上</div>
+                <div class="finance-stat-value">¥{{ "{:,}".format(finance_data.total_revenue) }}</div>
+            </div>
+            <div class="finance-stat-card">
+                <div class="finance-stat-label">総コスト</div>
+                <div class="finance-stat-value">¥{{ "{:,}".format(finance_data.total_cost) }}</div>
+            </div>
+            <div class="finance-stat-card">
+                <div class="finance-stat-label">粗利</div>
+                <div class="finance-stat-value">¥{{ "{:,}".format(finance_data.profit) }}</div>
+            </div>
+            <div class="finance-stat-card">
+                <div class="finance-stat-label">粗利率</div>
+                <div class="finance-stat-value">{{ finance_data.profit_rate }}%</div>
+            </div>
+        </div>
+    </section>
+
+    <section class="invoices-section">
+        <h2>請求書一覧</h2>
+        <div class="finance-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>案件名</th>
+                        <th>金額</th>
+                        <th>発行日</th>
+                        <th>ステータス</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for invoice in finance_data.invoices %}
+                    <tr>
+                        <td>{{ invoice.project_name }}</td>
+                        <td>¥{{ "{:,}".format(invoice.amount) }}</td>
+                        <td>{{ invoice.issue_date }}</td>
+                        <td><span class="status-badge status-{{ invoice.status }}">{{ invoice.status }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="payouts-section">
+        <h2>編集者支払一覧</h2>
+        <div class="finance-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>編集者</th>
+                        <th>案件名</th>
+                        <th>金額</th>
+                        <th>ステータス</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for payout in finance_data.payouts %}
+                    <tr>
+                        <td>{{ payout.editor }}</td>
+                        <td>{{ payout.project_name }}</td>
+                        <td>¥{{ "{:,}".format(payout.amount) }}</td>
+                        <td><span class="status-badge status-{{ payout.status }}">{{ payout.status }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+
+
+

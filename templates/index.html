@@ -1,0 +1,338 @@
+{% extends "layout.html" %}
+
+{% block title %}トップ - 案件管理システム{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <section class="stats-section">
+        <h2>統計情報</h2>
+        <div class="charts-container">
+            <div class="chart-wrapper">
+                <h3>案件ステータス分布</h3>
+                <canvas id="projectsStatusChart"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <h3>タスクステータス分布</h3>
+                <canvas id="tasksStatusChart"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <h3>案件数推移</h3>
+                <canvas id="projectsBarChart"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <h3>タスク数推移</h3>
+                <canvas id="tasksBarChart"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <section class="company-overview">
+        <h2>会社別概要</h2>
+        <div class="companies-grid">
+            {% for stat in company_stats %}
+            <div class="company-overview-card">
+                <div class="company-overview-header">
+                    <h3><a href="/companies/{{ stat.company.id }}">{{ stat.company.name }}</a></h3>
+                    <span class="company-code">{{ stat.company.code }}</span>
+                </div>
+                <div class="company-overview-body">
+                    <div class="overview-stats">
+                        <div class="overview-stat">
+                            <span class="overview-label">総案件数</span>
+                            <span class="overview-value">{{ stat.total }}</span>
+                        </div>
+                        <div class="overview-stat">
+                            <span class="overview-label">進行中</span>
+                            <span class="overview-value">{{ stat.active }}</span>
+                        </div>
+                        <div class="overview-stat">
+                            <span class="overview-label">完了</span>
+                            <span class="overview-value">{{ stat.completed }}</span>
+                        </div>
+                    </div>
+                    <div class="assignees-list">
+                        <strong>担当者:</strong>
+                        {% for assignee in stat.assignees %}
+                        <span class="assignee-tag">{{ assignee }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="recent-projects">
+        <h2>最近の案件</h2>
+        <div class="projects-grid">
+            {% for project in recent_projects %}
+            <div class="project-card">
+                <div class="project-header">
+                    <h3><a href="/projects/{{ project.id }}">{{ project.name }}</a></h3>
+                    <span class="status-badge status-{{ project.status }}">{{ project.status }}</span>
+                </div>
+                <div class="project-info">
+                    <p><strong>会社:</strong> {{ project.client_name }}</p>
+                    <p><strong>納期:</strong> {{ project.due_date }}</p>
+                    <p><strong>担当:</strong> {{ project.assignee }}</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: {{ project.progress }}%"></div>
+                        <span class="progress-text">{{ project.progress }}%</span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="recent-tasks">
+        <h2>優先タスク</h2>
+        <div class="tasks-list">
+            <table class="tasks-table">
+                <thead>
+                    <tr>
+                        <th>タスク名</th>
+                        <th>案件名</th>
+                        <th>タイプ</th>
+                        <th>担当者</th>
+                        <th>優先度</th>
+                        <th>期限</th>
+                        <th>ステータス</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for task in recent_tasks %}
+                    <tr>
+                        <td>{{ task.title }}</td>
+                        <td>{{ task.project_name }}</td>
+                        <td><span class="task-type">{{ task.type }}</span></td>
+                        <td>{{ task.assignee }}</td>
+                        <td>
+                            <span class="priority-badge priority-{{ task.priority }}">
+                                {{ task.priority }}
+                            </span>
+                        </td>
+                        <td>{{ task.due_date }}</td>
+                        <td><span class="status-badge status-{{ task.status }}">{{ task.status }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="section-actions">
+            <a href="/tasks" class="btn btn-primary">タスク一覧を見る</a>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ページ読み込み後にグラフを描画
+window.addEventListener('load', function() {
+    // 統計データ
+    const statsData = {
+        projects: {
+            total: {{ stats.total_projects }},
+            active: {{ stats.active_projects }},
+            completed: {{ stats.completed_projects }},
+            pending: {{ stats.pending_projects or 0 }}
+        },
+        tasks: {
+            total: {{ stats.total_tasks }},
+            active: {{ stats.active_tasks }},
+            completed: {{ stats.completed_tasks }},
+            pending: {{ stats.pending_tasks or 0 }}
+        }
+    };
+
+    // Chart.jsが読み込まれているか確認
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js is not loaded');
+        return;
+    }
+
+    // 案件ステータス円グラフ
+    const projectsCtx = document.getElementById('projectsStatusChart');
+    if (projectsCtx) {
+        new Chart(projectsCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['進行中', '完了', '計画中'],
+                datasets: [{
+                    data: [
+                        statsData.projects.active,
+                        statsData.projects.completed,
+                        statsData.projects.pending
+                    ],
+                    backgroundColor: [
+                        '#4dabf7',
+                        '#51cf66',
+                        '#ffd43b'
+                    ],
+                    borderColor: [
+                        '#1971c2',
+                        '#2f9e44',
+                        '#fab005'
+                    ],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    },
+                    title: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+
+    // タスクステータス円グラフ
+    const tasksCtx = document.getElementById('tasksStatusChart');
+    if (tasksCtx) {
+        new Chart(tasksCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['進行中', '完了', '待機中'],
+                datasets: [{
+                    data: [
+                        statsData.tasks.active,
+                        statsData.tasks.completed,
+                        statsData.tasks.pending
+                    ],
+                    backgroundColor: [
+                        '#4dabf7',
+                        '#51cf66',
+                        '#ffd43b'
+                    ],
+                    borderColor: [
+                        '#1971c2',
+                        '#2f9e44',
+                        '#fab005'
+                    ],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    },
+                    title: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+
+    // 案件数棒グラフ
+    const projectsBarCtx = document.getElementById('projectsBarChart');
+    if (projectsBarCtx) {
+        new Chart(projectsBarCtx, {
+            type: 'bar',
+            data: {
+                labels: ['総案件数', '進行中', '完了', '計画中'],
+                datasets: [{
+                    label: '案件数',
+                    data: [
+                        statsData.projects.total,
+                        statsData.projects.active,
+                        statsData.projects.completed,
+                        statsData.projects.pending
+                    ],
+                    backgroundColor: [
+                        '#868e96',
+                        '#4dabf7',
+                        '#51cf66',
+                        '#ffd43b'
+                    ],
+                    borderColor: [
+                        '#495057',
+                        '#1971c2',
+                        '#2f9e44',
+                        '#fab005'
+                    ],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // タスク数棒グラフ
+    const tasksBarCtx = document.getElementById('tasksBarChart');
+    if (tasksBarCtx) {
+        new Chart(tasksBarCtx, {
+            type: 'bar',
+            data: {
+                labels: ['総タスク数', '進行中', '完了', '待機中'],
+                datasets: [{
+                    label: 'タスク数',
+                    data: [
+                        statsData.tasks.total,
+                        statsData.tasks.active,
+                        statsData.tasks.completed,
+                        statsData.tasks.pending
+                    ],
+                    backgroundColor: [
+                        '#868e96',
+                        '#4dabf7',
+                        '#51cf66',
+                        '#ffd43b'
+                    ],
+                    borderColor: [
+                        '#495057',
+                        '#1971c2',
+                        '#2f9e44',
+                        '#fab005'
+                    ],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

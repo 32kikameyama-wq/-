@@ -1,0 +1,34 @@
+{% extends "layout.html" %}
+
+{% block title %}レポート - 案件管理システム{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <section class="reports-header">
+        <h2>レポート</h2>
+        <p>案件管理の各種レポートを生成・表示できます。</p>
+    </section>
+
+    <section class="reports-list">
+        <div class="report-card">
+            <h3>案件別収支レポート</h3>
+            <p>各案件の売上・コスト・粗利を一覧表示します。</p>
+            <button class="btn btn-primary">レポート生成</button>
+        </div>
+        <div class="report-card">
+            <h3>クライアント別サマリ</h3>
+            <p>クライアントごとの案件数、総売上、平均粗利率を表示します。</p>
+            <button class="btn btn-primary">レポート生成</button>
+        </div>
+        <div class="report-card">
+            <h3>編集者別稼働レポート</h3>
+            <p>編集者ごとの担当案件数、支払額、納期遵守率を表示します。</p>
+            <button class="btn btn-primary">レポート生成</button>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+
+
+
