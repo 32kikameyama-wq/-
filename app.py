@@ -22,6 +22,7 @@ from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 load_dotenv()
 
@@ -34,7 +35,19 @@ app.config['TEMPLATES_FOLDER'] = 'templates'
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key')
 
 
-DATABASE_URL = os.environ['DATABASE_URL']
+raw_database_url = os.environ['DATABASE_URL']
+parsed_url = urlparse(raw_database_url)
+query = parse_qs(parsed_url.query)
+if 'sslmode' not in query:
+    query['sslmode'] = ['require']
+parsed_url = parsed_url._replace(query=urlencode(query, doseq=True))
+DATABASE_URL = urlunparse(parsed_url)
+
+masked_netloc = parsed_url.netloc
+if parsed_url.password:
+    masked_netloc = masked_netloc.replace(parsed_url.password, '****')
+print(f"[startup] Using DATABASE_URL host={parsed_url.hostname} port={parsed_url.port} params={parsed_url.query}")
+
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 
