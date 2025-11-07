@@ -358,6 +358,29 @@ def role_required(*roles):
     return decorator
 
 
+def normalize_next_url(raw_value, default_endpoint=None):
+    if not raw_value:
+        return url_for(default_endpoint) if default_endpoint else None
+
+    value = str(raw_value).strip()
+    if value.lower() in {'none', 'null', 'undefined'}:
+        return url_for(default_endpoint) if default_endpoint else None
+
+    parsed = urlparse(value)
+
+    if parsed.scheme and parsed.scheme not in {'http', 'https'}:
+        return url_for(default_endpoint) if default_endpoint else None
+
+    if parsed.netloc and parsed.netloc != request.host:
+        return url_for(default_endpoint) if default_endpoint else None
+
+    next_path = parsed.path or '/'
+    if parsed.query:
+        next_path = f"{next_path}?{parsed.query}"
+
+    return next_path or (url_for(default_endpoint) if default_endpoint else None)
+
+
 @app.before_request
 def load_current_user():
     user_id = session.get('user_id')
@@ -1850,7 +1873,7 @@ def login():
     if request.method == 'POST':
         email = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
-        next_url = request.form.get('next')
+        next_url = normalize_next_url(request.form.get('next'))
 
         user = get_user_by_email(email)
         if not user or not check_password_hash(user['password_hash'], password):
@@ -1861,15 +1884,15 @@ def login():
             session['user_id'] = user['id']
             return redirect(next_url or url_for('index'))
 
-    next_url = request.args.get('next')
-    return render_template('auth/login.html', error=error, next_url=next_url)
+    next_url = normalize_next_url(request.args.get('next'))
+    return render_template('auth/login.html', error=error, next_url=next_url or '')
 
 
 @app.route('/logout', methods=['POST'])
 @login_required
 def logout():
     session.pop('user_id', None)
-    next_url = request.form.get('next') or url_for('login')
+    next_url = normalize_next_url(request.form.get('next'), default_endpoint='login')
     return redirect(next_url)
 
 
