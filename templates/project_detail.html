@@ -136,7 +136,7 @@
                     {% for task in tasks %}
                     <tr>
                         <td>{{ task.title }}</td>
-                        <td><span class="task-type">{{ task.type }}</span></td>
+                        <td><span class="task-type">{{ task_type_labels.get(task.type, task.type) }}</span></td>
                         <td>{{ task.assignee }}</td>
                         <td>
                             <span class="priority-badge priority-{{ task.priority or '中' }}">

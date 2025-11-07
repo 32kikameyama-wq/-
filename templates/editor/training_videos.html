@@ -1,0 +1,174 @@
+{% extends "editor_layout.html" %}
+
+{% block title %}編集インプット動画 - 編集者ポータル{% endblock %}
+
+{% block content %}
+<div class="content-wrapper training-videos-page">
+    <section class="page-header">
+        <div>
+            <h2>編集インプット動画</h2>
+            <p class="subtitle">管理者が共有した教材動画をまとめています。チームの基礎知識をいつでも振り返りましょう。</p>
+        </div>
+        {% if include_watchers %}
+        <div class="header-actions">
+            <button class="btn btn-primary" onclick="openTrainingVideoModal()">新規動画を登録</button>
+        </div>
+        {% endif %}
+    </section>
+
+    <section class="training-summary">
+        <div class="summary-card">
+            <div class="summary-label">登録動画</div>
+            <div class="summary-value">{{ summary.total_videos }}本</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-label">完了済み</div>
+            <div class="summary-value">{{ summary.completed_count }}本</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-label">視聴中</div>
+            <div class="summary-value">{{ summary.in_progress_count }}本</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-label">未着手</div>
+            <div class="summary-value">{{ summary.not_started_count }}本</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-label">全体平均進捗</div>
+            <div class="summary-value">{{ overall_completion }}%</div>
+        </div>
+    </section>
+
+    <section class="training-videos-list">
+        {% for video in videos %}
+        <article class="training-card" data-video-id="{{ video.id }}">
+            <header class="training-card-header">
+                <div>
+                    <h3>{{ video.title }}</h3>
+                    <p class="training-description">{{ video.description }}</p>
+                </div>
+                <div class="training-meta">
+                    <span class="training-duration">{{ video.duration_minutes or '---' }}分</span>
+                    <a href="{{ video.url }}" class="btn btn-secondary" target="_blank" rel="noopener">動画を開く</a>
+                </div>
+            </header>
+
+            <div class="training-stats">
+                <span>登録日: {{ video.created_at or '---' }}</span>
+                <span>作成: {{ video.created_by_name }}</span>
+                <span>視聴者: {{ video.total_viewers }}名 / 完了 {{ video.completed_viewers }}名</span>
+                <span>平均進捗: {{ video.avg_progress }}%</span>
+            </div>
+
+            <div class="training-progress-visual">
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ video.user_progress }}%"></div>
+                </div>
+                <div class="progress-value">{{ video.user_progress }}%</div>
+            </div>
+
+            <div class="training-progress-form">
+                <div class="form-group">
+                    <label>自分のステータス</label>
+                    <select class="training-status-select" data-video-id="{{ video.id }}">
+                        {% for status in status_options %}
+                        <option value="{{ status }}" {% if video.user_status == status %}selected{% endif %}>{{ status }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>進捗（%）</label>
+                    <input type="number" min="0" max="100" class="training-progress-input" data-video-id="{{ video.id }}" value="{{ video.user_progress }}">
+                </div>
+                <div class="form-group notes">
+                    <label>メモ（任意）</label>
+                    <textarea class="training-notes-input" data-video-id="{{ video.id }}" rows="2">{{ video.user_notes }}</textarea>
+                </div>
+                <p class="progress-message" data-role="message"></p>
+                <div class="form-actions">
+                    <span class="last-viewed">最終視聴: <span class="last-viewed-value">{{ video.user_last_viewed or '---' }}</span></span>
+                    <button class="btn btn-primary" data-action="save-progress" data-video-id="{{ video.id }}">進捗を保存</button>
+                </div>
+            </div>
+
+            {% if include_watchers %}
+            <details class="watchers-panel" {% if video.watchers %}open{% endif %}>
+                <summary>閲覧状況を確認</summary>
+                {% if video.watchers %}
+                <table class="watchers-table">
+                    <thead>
+                        <tr>
+                            <th>編集者</th>
+                            <th>状態</th>
+                            <th>進捗</th>
+                            <th>最終視聴</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for watcher in video.watchers %}
+                        <tr>
+                            <td>{{ watcher.name }}</td>
+                            <td>{{ watcher.status }}</td>
+                            <td>{{ watcher.progress_percent }}%</td>
+                            <td>{{ watcher.last_viewed_at or '---' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="empty">まだ視聴したメンバーはいません。</p>
+                {% endif %}
+            </details>
+            {% endif %}
+        </article>
+        {% else %}
+        <div class="empty-state">
+            <p>登録された動画はまだありません。{% if include_watchers %}「新規動画を登録」ボタンから追加してください。{% endif %}</p>
+        </div>
+        {% endfor %}
+    </section>
+</div>
+
+{% if include_watchers %}
+<div class="modal-overlay" id="trainingVideoModal" style="display: none;">
+    <div class="modal-content training-modal" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3>編集インプット動画を登録</h3>
+            <button class="close-btn" onclick="closeTrainingVideoModal()">×</button>
+        </div>
+        <form id="trainingVideoForm" class="training-form">
+            <div class="form-group">
+                <label for="training_title">タイトル *</label>
+                <input type="text" id="training_title" name="title" required>
+            </div>
+            <div class="form-group">
+                <label for="training_url">動画URL *</label>
+                <input type="url" id="training_url" name="url" placeholder="https://..." required>
+            </div>
+            <div class="form-group">
+                <label for="training_duration">想定視聴時間（分）</label>
+                <input type="number" id="training_duration" name="duration" min="0" placeholder="20">
+            </div>
+            <div class="form-group">
+                <label for="training_description">概要</label>
+                <textarea id="training_description" name="description" rows="3" placeholder="動画の目的やポイントを記載してください"></textarea>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeTrainingVideoModal()">キャンセル</button>
+                <button type="submit" class="btn btn-primary">登録</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/editor_training_videos.js') }}" defer></script>
+<script>
+    window.trainingVideoPage = {
+        includeWatchers: {{ 'true' if include_watchers else 'false' }}
+    };
+</script>
+{% endblock %}
+

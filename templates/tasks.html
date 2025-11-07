@@ -60,7 +60,7 @@
                         <td class="col-company">
                             <a href="/projects/{{ task.project_id or '' }}" class="project-link">{{ task.project_name }}</a>
                         </td>
-                        <td class="col-assignee"><span class="task-type">{{ task.type }}</span></td>
+                        <td class="col-assignee"><span class="task-type">{{ task_type_labels.get(task.type, task.type) }}</span></td>
                         <td class="col-assignee">{{ task.assignee }}</td>
                         <td class="col-due">
                             <span class="priority-badge priority-{{ task.priority }}">

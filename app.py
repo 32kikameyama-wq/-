@@ -58,6 +58,46 @@ ROLE_LABELS = {
     'viewer': '閲覧'
 }
 
+TASK_TYPE_LABELS = {
+    'EDIT': '編集',
+    'REVIEW': 'レビュー',
+    'THUMB': 'サムネイル',
+    'CAPTION': '字幕',
+    'DELIVERY': '納品',
+    'PLAN': '企画',
+    'SHOOT': '撮影',
+    'SCRIPT': '台本',
+    'MEETING': '打ち合わせ',
+    'OTHER': 'その他'
+}
+
+PASSWORD_HASH_METHOD = os.environ.get('PASSWORD_HASH_METHOD', 'pbkdf2:sha256')
+
+
+def hash_password(password: str) -> str:
+    """環境に依存しない安全なパスワードハッシュを生成"""
+    return generate_password_hash(password, method=PASSWORD_HASH_METHOD)
+
+
+TRAINING_STATUS_OPTIONS = ['未視聴', '視聴中', '視聴済', '要復習']
+
+
+def serialize_datetime(value):
+    if not value:
+        return None
+    if isinstance(value, str):
+        return value
+    return value.strftime('%Y-%m-%d %H:%M')
+
+
+def normalize_percent(value):
+    if value is None:
+        return 0
+    try:
+        return int(round(float(value)))
+    except (TypeError, ValueError):
+        return 0
+
 
 EDITOR_SHARED_SETTINGS = {}
 
@@ -122,6 +162,32 @@ def ensure_tables():
         """
         create unique index if not exists idx_editor_workspaces_user
         on app.editor_workspaces(user_id);
+        """,
+        """
+        create table if not exists app.training_videos (
+            id serial primary key,
+            title varchar(255) not null,
+            description text,
+            url text not null,
+            duration_minutes integer,
+            created_by integer references app.users(id),
+            created_at timestamp default now()
+        );
+        """,
+        """
+        create table if not exists app.training_video_progress (
+            video_id integer not null references app.training_videos(id) on delete cascade,
+            user_id integer not null references app.users(id) on delete cascade,
+            status varchar(50) not null default '未視聴',
+            progress_percent integer not null default 0,
+            last_viewed_at timestamp default now(),
+            notes text,
+            primary key (video_id, user_id)
+        );
+        """,
+        """
+        create index if not exists idx_training_video_progress_status
+        on app.training_video_progress(status);
         """
     ]
     for statement in statements:
@@ -302,7 +368,7 @@ def ensure_default_users():
             name='システム管理者',
             email='admin@example.com',
             role='admin',
-            password_hash=generate_password_hash('adminpass'),
+            password_hash=hash_password('adminpass'),
             active=True
         )
 
@@ -312,7 +378,7 @@ def ensure_default_users():
             name='テスト編集者',
             email='editor@example.com',
             role='editor',
-            password_hash=generate_password_hash('editorpass'),
+            password_hash=hash_password('editorpass'),
             active=True
         )
 
@@ -320,9 +386,86 @@ def ensure_default_users():
         create_editor_workspace_for_user(editor)
 
 
+def ensure_default_training_videos():
+    count_row = fetch_one("select count(1) as cnt from app.training_videos")
+    if count_row and count_row['cnt'] > 0:
+        return
+
+    admin = get_user_by_email('admin@example.com')
+    admin_id = admin['id'] if admin else None
+
+    default_videos = [
+        {
+            'title': '編集ルール基礎講座',
+            'description': '編集方針・命名規則・納品までの流れをまとめた社内向け動画です。',
+            'url': 'https://example.com/videos/editing-basics.mp4',
+            'duration_minutes': 18
+        },
+        {
+            'title': 'Premiere Pro ワークフロー',
+            'description': 'プロジェクトテンプレートの使い方と書き出し設定の解説です。',
+            'url': 'https://example.com/videos/premiere-workflow.mp4',
+            'duration_minutes': 24
+        }
+    ]
+
+    inserted_ids = []
+    with engine.begin() as conn:
+        for video in default_videos:
+            result = conn.execute(
+                text(
+                    """
+                    insert into app.training_videos (title, description, url, duration_minutes, created_by)
+                    values (:title, :description, :url, :duration_minutes, :created_by)
+                    returning id
+                    """
+                ),
+                {
+                    'title': video['title'],
+                    'description': video['description'],
+                    'url': video['url'],
+                    'duration_minutes': video['duration_minutes'],
+                    'created_by': admin_id
+                }
+            )
+            inserted_ids.append(result.scalar())
+
+    editor = get_user_by_email('editor@example.com')
+    if editor and inserted_ids:
+        progress_samples = [
+            {'status': '視聴済', 'progress_percent': 100},
+            {'status': '視聴中', 'progress_percent': 45}
+        ]
+        with engine.begin() as conn:
+            for idx, sample in enumerate(progress_samples):
+                if idx >= len(inserted_ids):
+                    break
+                conn.execute(
+                    text(
+                        """
+                        insert into app.training_video_progress (video_id, user_id, status, progress_percent, last_viewed_at)
+                        values (:video_id, :user_id, :status, :progress_percent, :last_viewed_at)
+                        on conflict (video_id, user_id)
+                        do update set
+                            status = excluded.status,
+                            progress_percent = excluded.progress_percent,
+                            last_viewed_at = excluded.last_viewed_at
+                        """
+                    ),
+                    {
+                        'video_id': inserted_ids[idx],
+                        'user_id': editor['id'],
+                        'status': sample['status'],
+                        'progress_percent': sample['progress_percent'],
+                        'last_viewed_at': datetime.now() - timedelta(days=1)
+                    }
+                )
+
+
 ensure_tables()
 load_editor_shared_settings()
 ensure_default_users()
+ensure_default_training_videos()
 
 # 認証/認可ユーティリティ
 
@@ -718,7 +861,7 @@ def index():
         'pending_tasks': pending_tasks
     }
     
-    return render_template('index.html', stats=stats, company_stats=company_stats, recent_projects=all_projects[:5], recent_tasks=recent_tasks)
+    return render_template('index.html', stats=stats, company_stats=company_stats, recent_projects=all_projects[:5], recent_tasks=recent_tasks, task_type_labels=TASK_TYPE_LABELS)
 
 @app.route('/projects')
 def projects():
@@ -832,6 +975,7 @@ def project_detail(project_id):
         back_url=url_for('projects'),
         company_url=url_for('company_detail', company_id=context['company']['id']) if context['company'] else None,
         allow_project_actions=True,
+        task_type_labels=TASK_TYPE_LABELS,
         **context
     )
 
@@ -1201,7 +1345,7 @@ def tasks():
     page = request.args.get('page', 1, type=int)
     per_page = 10
     
-    return render_template('tasks.html', tasks=my_tasks, today=today, page=page, per_page=per_page)
+    return render_template('tasks.html', tasks=my_tasks, today=today, page=page, per_page=per_page, task_type_labels=TASK_TYPE_LABELS)
 
 @app.route('/api/tasks')
 def api_tasks():
@@ -1516,6 +1660,7 @@ def editor_project_detail(project_id):
         back_url=url_for('editor_projects'),
         company_url=url_for('editor_company_detail', company_id=company['id']) if company else None,
         allow_project_actions=False,
+        task_type_labels=TASK_TYPE_LABELS,
         **context
     )
 
@@ -1545,6 +1690,35 @@ def editor_assets():
         assets=SAMPLE_ASSETS,
         projects=all_projects,
         base_template='editor_layout.html'
+    )
+
+
+@app.route('/editor/input-videos')
+@login_required
+@role_required('admin', 'editor')
+def editor_input_videos():
+    """編集インプット動画一覧"""
+    current_user = g.current_user
+    include_watchers = current_user.get('role') == 'admin'
+    videos = get_training_videos_for_portal(current_user, include_watchers=include_watchers)
+
+    summary = {
+        'total_videos': len(videos),
+        'completed_count': len([v for v in videos if v['user_progress'] >= 100 or v['user_status'] == '視聴済']),
+        'in_progress_count': len([v for v in videos if 0 < v['user_progress'] < 100 and v['user_status'] != '視聴済']),
+        'not_started_count': len([v for v in videos if v['user_progress'] == 0 and v['user_status'] == '未視聴'])
+    }
+    overall_completion = 0
+    if videos:
+        overall_completion = int(round(sum(v['avg_progress'] for v in videos) / len(videos)))
+
+    return render_template(
+        'editor/training_videos.html',
+        videos=videos,
+        include_watchers=include_watchers,
+        status_options=TRAINING_STATUS_OPTIONS,
+        summary=summary,
+        overall_completion=overall_completion
     )
 
 
@@ -1939,7 +2113,7 @@ def admin_users():
                 name=name,
                 email=email,
                 role=role,
-                password_hash=generate_password_hash(password),
+                password_hash=hash_password(password),
                 active=active
             )
             workspace_message = ''
@@ -1957,6 +2131,223 @@ def admin_users():
         success=success,
         form_data=form_data
     )
+
+def get_training_videos_for_portal(user, include_watchers=False):
+    videos = fetch_all(
+        """
+        select
+            tv.id,
+            tv.title,
+            tv.description,
+            tv.url,
+            tv.duration_minutes,
+            tv.created_at,
+            tv.created_by,
+            creator.name as created_by_name,
+            coalesce(stats.total_viewers, 0) as total_viewers,
+            coalesce(stats.completed_viewers, 0) as completed_viewers,
+            coalesce(stats.avg_progress, 0) as avg_progress
+        from app.training_videos tv
+        left join app.users creator on creator.id = tv.created_by
+        left join (
+            select
+                video_id,
+                count(*) filter (where status <> '未視聴') as total_viewers,
+                count(*) filter (where status in ('視聴済', '完了')) as completed_viewers,
+                avg(progress_percent) as avg_progress
+            from app.training_video_progress
+            group by video_id
+        ) stats on stats.video_id = tv.id
+        order by tv.created_at desc
+        """
+    )
+
+    user_progress_map = {}
+    if user:
+        progress_rows = fetch_all(
+            """
+            select video_id, status, progress_percent, last_viewed_at, notes
+            from app.training_video_progress
+            where user_id = :user_id
+            """,
+            user_id=user['id']
+        )
+        for row in progress_rows:
+            user_progress_map[row['video_id']] = row
+
+    watchers_map = {}
+    if include_watchers:
+        watcher_rows = fetch_all(
+            """
+            select
+                p.video_id,
+                u.name,
+                u.email,
+                p.status,
+                p.progress_percent,
+                p.last_viewed_at
+            from app.training_video_progress p
+            join app.users u on u.id = p.user_id
+            order by p.video_id, u.name
+            """
+        )
+        for row in watcher_rows:
+            watchers_map.setdefault(row['video_id'], []).append({
+                'name': row['name'],
+                'email': row['email'],
+                'status': row['status'],
+                'progress_percent': row['progress_percent'],
+                'last_viewed_at': serialize_datetime(row['last_viewed_at'])
+            })
+
+    results = []
+    for video in videos:
+        progress = user_progress_map.get(video['id'])
+        video_context = {
+            'id': video['id'],
+            'title': video['title'],
+            'description': video.get('description') or '',
+            'url': video['url'],
+            'duration_minutes': video.get('duration_minutes'),
+            'created_at': serialize_datetime(video.get('created_at')),
+            'created_by_name': video.get('created_by_name') or '管理者',
+            'total_viewers': video.get('total_viewers', 0),
+            'completed_viewers': video.get('completed_viewers', 0),
+            'avg_progress': normalize_percent(video.get('avg_progress')),
+            'user_status': progress['status'] if progress else '未視聴',
+            'user_progress': progress['progress_percent'] if progress else 0,
+            'user_last_viewed': serialize_datetime(progress.get('last_viewed_at')) if progress and progress.get('last_viewed_at') else None,
+            'user_notes': progress.get('notes') if progress else ''
+        }
+        if include_watchers:
+            video_context['watchers'] = watchers_map.get(video['id'], [])
+        results.append(video_context)
+
+    return results
+
+
+def get_training_video_context(video_id: int, user, include_watchers=False):
+    videos = get_training_videos_for_portal(user, include_watchers=include_watchers)
+    return next((video for video in videos if video['id'] == video_id), None)
+
+
+def upsert_training_progress(video_id: int, user_id: int, status: str, progress_percent: int, notes: str = ''):
+    status = status if status in TRAINING_STATUS_OPTIONS else '視聴中'
+    progress_percent = max(0, min(100, progress_percent))
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                insert into app.training_video_progress (video_id, user_id, status, progress_percent, last_viewed_at, notes)
+                values (:video_id, :user_id, :status, :progress_percent, :last_viewed_at, :notes)
+                on conflict (video_id, user_id) do update set
+                    status = excluded.status,
+                    progress_percent = excluded.progress_percent,
+                    last_viewed_at = excluded.last_viewed_at,
+                    notes = excluded.notes
+                """
+            ),
+            video_id=video_id,
+            user_id=user_id,
+            status=status,
+            progress_percent=progress_percent,
+            last_viewed_at=datetime.now(),
+            notes=notes
+        )
+
+@app.route('/api/editor/training-videos/<int:video_id>/progress', methods=['POST'])
+@login_required
+@role_required('admin', 'editor')
+def api_update_training_video_progress(video_id):
+    """編集インプット動画の進捗更新"""
+    video = fetch_one("select id from app.training_videos where id = :video_id", video_id=video_id)
+    if not video:
+        return jsonify({'status': 'error', 'message': '動画が見つかりません'}), 404
+
+    data = request.get_json() or {}
+    status = (data.get('status') or '視聴中').strip()
+    notes = data.get('notes', '').strip()
+
+    try:
+        progress_value = int(data.get('progress_percent', data.get('progress', 0)))
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error', 'message': '進捗は0〜100の範囲で入力してください'}), 400
+
+    upsert_training_progress(
+        video_id=video_id,
+        user_id=g.current_user['id'],
+        status=status,
+        progress_percent=progress_value,
+        notes=notes
+    )
+
+    video_context = get_training_video_context(
+        video_id,
+        g.current_user,
+        include_watchers=g.current_user.get('role') == 'admin'
+    )
+    return jsonify({
+        'status': 'success',
+        'message': '進捗を更新しました',
+        'data': video_context
+    })
+
+
+@app.route('/api/admin/training-videos', methods=['POST'])
+@login_required
+@role_required('admin')
+def api_admin_create_training_video():
+    """管理者: 編集インプット動画の登録"""
+    data = request.get_json() or {}
+    title = (data.get('title') or '').strip()
+    url = (data.get('url') or '').strip()
+    description = (data.get('description') or '').strip()
+    duration_value = data.get('duration_minutes')
+
+    errors = []
+    if not title:
+        errors.append('タイトルは必須です')
+    if not url:
+        errors.append('動画URLは必須です')
+
+    duration_minutes = None
+    if duration_value not in (None, ''):
+        try:
+            duration_minutes = int(duration_value)
+            if duration_minutes < 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            errors.append('想定視聴時間は0以上の数値で入力してください')
+
+    if errors:
+        return jsonify({'status': 'error', 'message': ' / '.join(errors)}), 400
+
+    with engine.begin() as conn:
+        result = conn.execute(
+            text(
+                """
+                insert into app.training_videos (title, description, url, duration_minutes, created_by)
+                values (:title, :description, :url, :duration_minutes, :created_by)
+                returning id
+                """
+            ),
+            {
+                'title': title,
+                'description': description,
+                'url': url,
+                'duration_minutes': duration_minutes,
+                'created_by': g.current_user['id']
+            }
+        )
+        new_id = result.scalar()
+
+    video_context = get_training_video_context(new_id, g.current_user, include_watchers=True)
+    return jsonify({
+        'status': 'success',
+        'message': '動画を登録しました',
+        'data': video_context
+    })
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='127.0.0.1', port=5001)
