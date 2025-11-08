@@ -1,0 +1,140 @@
+{% extends "layout.html" %}
+
+{% block title %}編集インプット動画管理 - 案件管理システム{% endblock %}
+
+{% block content %}
+<div class="content-wrapper training-videos-page admin-training-page">
+    <section class="page-header">
+        <div>
+            <h2>インプット動画共有管理</h2>
+            <p class="subtitle">管理者専用の教材動画登録・閲覧ページです。登録した動画は編集者ポータルに自動で反映されます。</p>
+        </div>
+    </section>
+
+    <section class="training-summary">
+        <div class="summary-card">
+            <div class="summary-label">登録動画</div>
+            <div class="summary-value">{{ summary.total_videos }}本</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-label">視聴開始済み</div>
+            <div class="summary-value">{{ summary.in_progress_count }}本</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-label">視聴完了がいる動画</div>
+            <div class="summary-value">{{ summary.completed_count }}本</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-label">未視聴</div>
+            <div class="summary-value">{{ summary.not_started_count }}本</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-label">平均進捗</div>
+            <div class="summary-value">{{ overall_completion }}%</div>
+        </div>
+    </section>
+
+    <section class="admin-training-form">
+        <h3>新規動画を登録</h3>
+        <p class="subtitle">動画ファイルをアップロードするか、外部リンクを登録してください。ファイルを指定した場合はURLより優先されます。</p>
+        <form id="adminTrainingForm" class="training-form" enctype="multipart/form-data">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="training_title_admin">タイトル *</label>
+                    <input type="text" id="training_title_admin" name="title" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="training_file_admin">動画ファイル</label>
+                    <input type="file" id="training_file_admin" name="video_file" accept=".mp4,.mov,.avi,.mkv,.wmv,.m4v">
+                    <small class="form-text">対応形式: mp4, mov, avi, mkv, wmv, m4v</small>
+                </div>
+                <div class="form-group">
+                    <label for="training_url_admin">動画URL</label>
+                    <input type="url" id="training_url_admin" name="url" placeholder="https://...">
+                    <small class="form-text">ファイルを指定した場合は不要です</small>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="training_duration_admin">想定視聴時間（分）</label>
+                    <input type="number" id="training_duration_admin" name="duration_minutes" min="0" placeholder="20">
+                </div>
+                <div class="form-group">
+                    <label for="training_description_admin">概要</label>
+                    <textarea id="training_description_admin" name="description" rows="3" placeholder="動画のポイントや使用シーンなどを記載してください"></textarea>
+                </div>
+            </div>
+            <div class="form-actions">
+                <span id="adminTrainingMessage" class="form-message"></span>
+                <button type="submit" class="btn btn-primary">登録する</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="training-videos-list">
+        {% for video in videos %}
+        <article class="training-card" data-video-id="{{ video.id }}">
+            <header class="training-card-header">
+                <div>
+                    <h3>{{ video.title }}</h3>
+                    <p class="training-description">{{ video.description }}</p>
+                </div>
+                <div class="training-meta">
+                    <span class="training-duration">{{ video.duration_minutes or '---' }}分</span>
+                    <a href="{{ video.url }}" target="_blank" rel="noopener" class="btn btn-secondary">動画を開く</a>
+                </div>
+            </header>
+
+            <div class="training-stats">
+                <span>登録日: {{ video.created_at or '---' }}</span>
+                <span>作成: {{ video.created_by_name }}</span>
+                <span>視聴開始: {{ video.total_viewers }}名</span>
+                <span>完了: {{ video.completed_viewers }}名</span>
+                <span>平均進捗: {{ video.avg_progress }}%</span>
+            </div>
+
+            {% if video.watchers %}
+            <details class="watchers-panel" open>
+                <summary>視聴状況</summary>
+                <table class="watchers-table">
+                    <thead>
+                        <tr>
+                            <th>編集者</th>
+                            <th>状態</th>
+                            <th>進捗</th>
+                            <th>最終視聴</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for watcher in video.watchers %}
+                        <tr>
+                            <td>{{ watcher.name }}</td>
+                            <td>{{ watcher.status }}</td>
+                            <td>{{ watcher.progress_percent }}%</td>
+                            <td>{{ watcher.last_viewed_at or '---' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </details>
+            {% else %}
+            <div class="watchers-panel">
+                <p class="empty">まだ視聴した編集者はいません。</p>
+            </div>
+            {% endif %}
+        </article>
+        {% else %}
+        <div class="empty-state">
+            <p>登録された動画はまだありません。上部のフォームから教材動画を追加してください。</p>
+        </div>
+        {% endfor %}
+    </section>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/admin_training_videos.js') }}" defer></script>
+{% endblock %}
+

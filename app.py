@@ -7,7 +7,8 @@ from flask import (
     redirect,
     session,
     g,
-    abort
+    abort,
+    send_from_directory
 )
 from flask_cors import CORS
 import os
@@ -23,6 +24,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+from werkzeug.utils import secure_filename
+from uuid import uuid4
 
 load_dotenv()
 
@@ -97,6 +100,16 @@ def normalize_percent(value):
         return int(round(float(value)))
     except (TypeError, ValueError):
         return 0
+
+
+def allowed_training_video_filename(filename: str) -> bool:
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_TRAINING_VIDEO_EXTENSIONS
+
+
+ALLOWED_TRAINING_VIDEO_EXTENSIONS = {'mp4', 'mov', 'avi', 'mkv', 'wmv', 'm4v'}
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TRAINING_VIDEO_UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads', 'training_videos')
+os.makedirs(TRAINING_VIDEO_UPLOAD_FOLDER, exist_ok=True)
 
 
 EDITOR_SHARED_SETTINGS = {}
@@ -2298,17 +2311,35 @@ def api_update_training_video_progress(video_id):
 @role_required('admin')
 def api_admin_create_training_video():
     """管理者: 編集インプット動画の登録"""
-    data = request.get_json() or {}
-    title = (data.get('title') or '').strip()
-    url = (data.get('url') or '').strip()
-    description = (data.get('description') or '').strip()
-    duration_value = data.get('duration_minutes')
+    form = request.form
+    files = request.files
+
+    title = (form.get('title') or '').strip()
+    url_value = (form.get('url') or '').strip()
+    description = (form.get('description') or '').strip()
+    duration_value = form.get('duration_minutes', form.get('duration'))
+    uploaded_file = files.get('video_file') if files else None
 
     errors = []
     if not title:
         errors.append('タイトルは必須です')
-    if not url:
-        errors.append('動画URLは必須です')
+
+    video_url = None
+    if uploaded_file and uploaded_file.filename:
+        filename = uploaded_file.filename
+        if not allowed_training_video_filename(filename):
+            errors.append('対応していない動画形式です (mp4, mov, avi, mkv, wmv, m4v)')
+        else:
+            extension = filename.rsplit('.', 1)[1].lower()
+            unique_name = f"{uuid4().hex}.{extension}"
+            safe_name = secure_filename(unique_name)
+            save_path = os.path.join(TRAINING_VIDEO_UPLOAD_FOLDER, safe_name)
+            uploaded_file.save(save_path)
+            video_url = url_for('serve_training_video', filename=safe_name)
+    elif url_value:
+        video_url = url_value
+    else:
+        errors.append('動画URLまたは動画ファイルのいずれかを指定してください')
 
     duration_minutes = None
     if duration_value not in (None, ''):
@@ -2334,7 +2365,7 @@ def api_admin_create_training_video():
             {
                 'title': title,
                 'description': description,
-                'url': url,
+                'url': video_url,
                 'duration_minutes': duration_minutes,
                 'created_by': g.current_user['id']
             }
@@ -2348,7 +2379,35 @@ def api_admin_create_training_video():
         'data': video_context
     })
 
+@app.route('/admin/training-videos')
+@login_required
+@role_required('admin')
+def admin_training_videos():
+    """管理者向け編集インプット動画管理"""
+    videos = get_training_videos_for_portal(g.current_user, include_watchers=True)
+    summary = {
+        'total_videos': len(videos),
+        'completed_count': len([v for v in videos if v['avg_progress'] >= 99]),
+        'in_progress_count': len([v for v in videos if 0 < v['avg_progress'] < 99]),
+        'not_started_count': len([v for v in videos if v['avg_progress'] == 0])
+    }
+    overall_completion = int(round(sum(v['avg_progress'] for v in videos) / len(videos))) if videos else 0
+    return render_template(
+        'admin/training_videos.html',
+        videos=videos,
+        status_options=TRAINING_STATUS_OPTIONS,
+        summary=summary,
+        overall_completion=overall_completion
+    )
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='127.0.0.1', port=5001)
+
+
+@app.route('/uploads/training_videos/<path:filename>')
+@login_required
+@role_required('admin', 'editor')
+def serve_training_video(filename):
+    return send_from_directory(TRAINING_VIDEO_UPLOAD_FOLDER, filename)
 

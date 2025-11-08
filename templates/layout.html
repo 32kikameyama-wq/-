@@ -124,6 +124,11 @@
                             <span class="nav-text">ユーザー管理</span>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('admin_training_videos') }}" class="nav-link {% if request.endpoint == 'admin_training_videos' %}active{% endif %}">
+                            <span class="nav-text">インプット動画共有管理</span>
+                        </a>
+                    </li>
                     {% endif %}
                     <li class="nav-item">
                         <a href="/settings" class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}">

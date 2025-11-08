@@ -862,8 +862,13 @@ section h3 {
 }
 
 .tasks-table td {
-    padding: 12px 15px;
+    padding: 6px 4px;
     border-bottom: 1px solid #000;
+    border-right: 1px solid #000;
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .tasks-table tr:hover {
@@ -3473,4 +3478,13 @@ section h3 {
     .stats-grid {
         grid-template-columns: 1fr;
     }
+}
+
+.form-message {
+    font-size: 0.85em;
+    color: #2b8a3e;
+}
+
+.form-message.error {
+    color: #c92a2a;
 }

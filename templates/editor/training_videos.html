@@ -9,11 +9,6 @@
             <h2>編集インプット動画</h2>
             <p class="subtitle">管理者が共有した教材動画をまとめています。チームの基礎知識をいつでも振り返りましょう。</p>
         </div>
-        {% if include_watchers %}
-        <div class="header-actions">
-            <button class="btn btn-primary" onclick="openTrainingVideoModal()">新規動画を登録</button>
-        </div>
-        {% endif %}
     </section>
 
     <section class="training-summary">
@@ -91,7 +86,7 @@
                 </div>
             </div>
 
-            {% if include_watchers %}
+            {% if include_watchers and video.watchers %}
             <details class="watchers-panel" {% if video.watchers %}open{% endif %}>
                 <summary>閲覧状況を確認</summary>
                 {% if video.watchers %}
@@ -119,6 +114,10 @@
                 <p class="empty">まだ視聴したメンバーはいません。</p>
                 {% endif %}
             </details>
+            {% elif include_watchers %}
+            <div class="watchers-panel">
+                <p class="empty">まだ視聴したメンバーはいません。</p>
+            </div>
             {% endif %}
         </article>
         {% else %}
@@ -129,38 +128,6 @@
     </section>
 </div>
 
-{% if include_watchers %}
-<div class="modal-overlay" id="trainingVideoModal" style="display: none;">
-    <div class="modal-content training-modal" onclick="event.stopPropagation()">
-        <div class="modal-header">
-            <h3>編集インプット動画を登録</h3>
-            <button class="close-btn" onclick="closeTrainingVideoModal()">×</button>
-        </div>
-        <form id="trainingVideoForm" class="training-form">
-            <div class="form-group">
-                <label for="training_title">タイトル *</label>
-                <input type="text" id="training_title" name="title" required>
-            </div>
-            <div class="form-group">
-                <label for="training_url">動画URL *</label>
-                <input type="url" id="training_url" name="url" placeholder="https://..." required>
-            </div>
-            <div class="form-group">
-                <label for="training_duration">想定視聴時間（分）</label>
-                <input type="number" id="training_duration" name="duration" min="0" placeholder="20">
-            </div>
-            <div class="form-group">
-                <label for="training_description">概要</label>
-                <textarea id="training_description" name="description" rows="3" placeholder="動画の目的やポイントを記載してください"></textarea>
-            </div>
-            <div class="form-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeTrainingVideoModal()">キャンセル</button>
-                <button type="submit" class="btn btn-primary">登録</button>
-            </div>
-        </form>
-    </div>
-</div>
-{% endif %}
 {% endblock %}
 
 {% block extra_scripts %}

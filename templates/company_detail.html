@@ -26,6 +26,7 @@
                     <tr>
                         <th class="col-id">ID</th>
                         <th class="col-title">企画タイトル</th>
+                        <th class="col-axis">動画種類</th>
                         <th class="col-due">納期</th>
                         <th class="col-assignee">担当</th>
                         <th class="col-cl">CL</th>
@@ -42,6 +43,11 @@
                         <td class="col-id">{{ project.id }}</td>
                         <td class="col-title">
                             <a href="{{ url_for(project_detail_endpoint, project_id=project.id) }}">{{ project.name }}</a>
+                        </td>
+                        <td class="col-axis">
+                            <span class="axis-badge axis-{{ project.video_axis or 'LONG' }}">
+                                {{ project.video_axis or 'LONG' }}
+                            </span>
                         </td>
                         <td class="col-due">{{ project.due_date }}</td>
                         <td class="col-assignee">{{ project.assignee }}</td>
