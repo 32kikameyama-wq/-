@@ -202,7 +202,11 @@
                             <td>{{ asset.uploaded_by }}</td>
                             <td>{{ asset.uploaded_at }}</td>
                             <td>
-                                <a href="#" class="btn-link btn-link-small">表示</a>
+                                {% if asset.url %}
+                                <a href="{{ asset.url }}" target="_blank" class="btn-link btn-link-small">表示</a>
+                                {% else %}
+                                <span class="btn-link-small disabled">-</span>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}
@@ -266,43 +270,338 @@
 </div>
 
 <script>
+const PROJECT_ID = {{ project.id }};
+const PROJECT_NAME = {{ project.name|tojson }};
+const DEFAULT_ASSIGNEE = {{ project.assignee|tojson }};
+const DEFAULT_DUE_DATE = {{ project.due_date|tojson }};
+
 function showTab(tabName) {
-    // すべてのタブコンテンツを非表示
-    document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    
-    // すべてのタブボタンからactiveクラスを削除
-    document.querySelectorAll('.tab-button').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    
-    // 選択されたタブを表示
+    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
     document.getElementById('tab-' + tabName).classList.add('active');
-    
-    // 選択されたタブボタンにactiveクラスを追加
-    event.target.classList.add('active');
+    if (event && event.target) {
+        event.target.classList.add('active');
+    }
+}
+
+function closeDynamicModal(element) {
+    const modal = element.closest('.project-form-modal');
+    if (modal) {
+        modal.remove();
+    }
 }
 
 function addVideoItem() {
-    alert('アイテム追加機能は実装予定です');
+    const modal = document.createElement('div');
+    modal.className = 'project-form-modal';
+    modal.innerHTML = `
+        <div class="modal-overlay" onclick="closeDynamicModal(this)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h3>動画アイテムを追加</h3>
+                    <button class="close-btn" onclick="closeDynamicModal(this)">×</button>
+                </div>
+                <form id="videoItemForm" class="project-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="video_title">タイトル *</label>
+                            <input type="text" id="video_title" name="title" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="video_axis">種類</label>
+                            <select id="video_axis" name="axis">
+                                <option value="LONG">LONG（長尺）</option>
+                                <option value="SHORT">SHORT（ショート）</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="video_status">ステータス</label>
+                            <select id="video_status" name="status">
+                                <option value="計画中">計画中</option>
+                                <option value="進行中" selected>進行中</option>
+                                <option value="完了">完了</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="video_assignee">担当</label>
+                            <input type="text" id="video_assignee" name="assignee" value="${DEFAULT_ASSIGNEE || ''}">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="planned_start">開始予定日</label>
+                            <input type="date" id="planned_start" name="planned_start" value="${DEFAULT_DUE_DATE || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label for="planned_end">完了予定日</label>
+                            <input type="date" id="planned_end" name="planned_end" value="${DEFAULT_DUE_DATE || ''}">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeDynamicModal(this)">キャンセル</button>
+                        <button type="submit" class="btn btn-primary">追加</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelector('#videoItemForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        const payload = {
+            title: (formData.get('title') || '').trim(),
+            axis: formData.get('axis'),
+            status: formData.get('status'),
+            assignee: formData.get('assignee'),
+            planned_start: formData.get('planned_start'),
+            planned_end: formData.get('planned_end')
+        };
+        if (!payload.title) {
+            alert('タイトルを入力してください');
+            return;
+        }
+        fetch(`/api/projects/${PROJECT_ID}/video-items`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.status === 'success') {
+                modal.remove();
+                location.reload();
+            } else {
+                alert('エラー: ' + result.message);
+            }
+        })
+        .catch(error => {
+            console.error(error);
+            alert('動画アイテムの追加中にエラーが発生しました');
+        });
+    });
 }
 
 function addTask() {
-    alert('タスク追加機能は実装予定です');
+    const modal = document.createElement('div');
+    modal.className = 'project-form-modal';
+    modal.innerHTML = `
+        <div class="modal-overlay" onclick="closeDynamicModal(this)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h3>タスクを追加</h3>
+                    <button class="close-btn" onclick="closeDynamicModal(this)">×</button>
+                </div>
+                <form id="taskForm" class="project-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="task_title">タスク名 *</label>
+                            <input type="text" id="task_title" name="title" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="task_type">種別</label>
+                            <select id="task_type" name="type">
+                                <option value="EDIT">EDIT（編集）</option>
+                                <option value="REVIEW">REVIEW（レビュー）</option>
+                                <option value="DELIVERY">DELIVERY（納品）</option>
+                                <option value="CAPTION">CAPTION（字幕）</option>
+                                <option value="OTHER">OTHER</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="task_status">ステータス</label>
+                            <select id="task_status" name="status">
+                                <option value="未着手">未着手</option>
+                                <option value="進行中" selected>進行中</option>
+                                <option value="待機中">待機中</option>
+                                <option value="完了">完了</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="task_priority">優先度</label>
+                            <select id="task_priority" name="priority">
+                                <option value="高">高</option>
+                                <option value="中" selected>中</option>
+                                <option value="低">低</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="task_assignee">担当</label>
+                            <input type="text" id="task_assignee" name="assignee" value="${DEFAULT_ASSIGNEE || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label for="task_due_date">期限</label>
+                            <input type="date" id="task_due_date" name="due_date" value="${DEFAULT_DUE_DATE || ''}">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeDynamicModal(this)">キャンセル</button>
+                        <button type="submit" class="btn btn-primary">追加</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelector('#taskForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        const title = (formData.get('title') || '').trim();
+        if (!title) {
+            alert('タスク名を入力してください');
+            return;
+        }
+        const payload = {
+            title,
+            type: formData.get('type'),
+            status: formData.get('status'),
+            assignee: formData.get('assignee'),
+            due_date: formData.get('due_date'),
+            priority: formData.get('priority')
+        };
+        fetch(`/api/projects/${PROJECT_ID}/tasks`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.status === 'success') {
+                modal.remove();
+                location.reload();
+            } else {
+                alert('エラー: ' + result.message);
+            }
+        })
+        .catch(error => {
+            console.error(error);
+            alert('タスク追加中にエラーが発生しました');
+        });
+    });
 }
 
 function addAsset() {
-    alert('素材追加機能は実装予定です');
+    const modal = document.createElement('div');
+    modal.className = 'project-form-modal';
+    modal.innerHTML = `
+        <div class="modal-overlay" onclick="closeDynamicModal(this)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h3>素材を追加</h3>
+                    <button class="close-btn" onclick="closeDynamicModal(this)">×</button>
+                </div>
+                <form id="assetForm" class="project-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="asset_name">ファイル名 *</label>
+                            <input type="text" id="asset_name" name="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="asset_kind">種別</label>
+                            <select id="asset_kind" name="kind">
+                                <option value="raw">素材</option>
+                                <option value="final">完成版</option>
+                                <option value="music">音源</option>
+                                <option value="reference">参考資料</option>
+                                <option value="other">その他</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="asset_url">URL</label>
+                            <input type="url" id="asset_url" name="url" placeholder="https://...">
+                        </div>
+                        <div class="form-group">
+                            <label for="asset_size">サイズ</label>
+                            <input type="text" id="asset_size" name="size" placeholder="例: 120MB">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="asset_version">バージョン</label>
+                            <input type="number" id="asset_version" name="version" value="1" min="1">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeDynamicModal(this)">キャンセル</button>
+                        <button type="submit" class="btn btn-primary">追加</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelector('#assetForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        const name = (formData.get('name') || '').trim();
+        if (!name) {
+            alert('ファイル名を入力してください');
+            return;
+        }
+        const payload = {
+            name,
+            kind: formData.get('kind'),
+            url: formData.get('url'),
+            size: formData.get('size'),
+            version: parseInt(formData.get('version'), 10) || 1
+        };
+        fetch(`/api/projects/${PROJECT_ID}/assets`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.status === 'success') {
+                modal.remove();
+                location.reload();
+            } else {
+                alert('エラー: ' + result.message);
+            }
+        })
+        .catch(error => {
+            console.error(error);
+            alert('素材追加中にエラーが発生しました');
+        });
+    });
 }
 
 function addComment() {
-    const text = document.getElementById('comment-text').value;
-    if (!text.trim()) {
+    const textarea = document.getElementById('comment-text');
+    const content = textarea.value.trim();
+    if (!content) {
         alert('コメントを入力してください');
         return;
     }
-    alert('コメント投稿機能は実装予定です');
+    fetch(`/api/projects/${PROJECT_ID}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.status === 'success') {
+            textarea.value = '';
+            location.reload();
+        } else {
+            alert('エラー: ' + result.message);
+        }
+    })
+    .catch(error => {
+        console.error(error);
+        alert('コメント追加中にエラーが発生しました');
+    });
 }
 </script>
 {% endblock %}

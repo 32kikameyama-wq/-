@@ -20,6 +20,7 @@ import io
 import re
 import json
 from functools import wraps
+from itertools import count
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
@@ -110,6 +111,11 @@ ALLOWED_TRAINING_VIDEO_EXTENSIONS = {'mp4', 'mov', 'avi', 'mkv', 'wmv', 'm4v'}
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TRAINING_VIDEO_UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads', 'training_videos')
 os.makedirs(TRAINING_VIDEO_UPLOAD_FOLDER, exist_ok=True)
+
+VIDEO_ITEM_ID_COUNTER = count(1)
+COMMENT_ID_COUNTER = count(1)
+PROJECT_VIDEO_ITEMS = {}
+PROJECT_COMMENTS = {}
 
 
 EDITOR_SHARED_SETTINGS = {}
@@ -782,6 +788,45 @@ SAMPLE_ASSETS = [
     }
 ]
 
+
+def next_task_id():
+    return max([t['id'] for t in SAMPLE_TASKS], default=0) + 1
+
+
+def next_asset_id():
+    return max([a['id'] for a in SAMPLE_ASSETS], default=0) + 1
+
+
+def create_task_entry(
+    title: str,
+    task_type: str = 'EDIT',
+    status: str = '待機中',
+    assignee: str = 'テスト',
+    due_date: str = '',
+    priority: str = '中',
+    project=None,
+    project_id: int = None,
+    progress: int = 0
+):
+    project_name = ''
+    if project:
+        project_name = project.get('name', '')
+        project_id = project.get('id')
+    task_type = task_type.upper()
+    return {
+        'id': next_task_id(),
+        'title': title,
+        'project_name': project_name,
+        'project_id': project_id,
+        'type': task_type,
+        'status': status,
+        'assignee': assignee,
+        'due_date': due_date,
+        'priority': priority,
+        'progress': progress
+    }
+
+
 # 全案件をフラット化（全社統合ビュー用）
 def get_all_projects():
     """全会社の案件を統合して返す"""
@@ -795,6 +840,73 @@ def get_all_projects():
     return all_projects
 
 SAMPLE_PROJECTS = get_all_projects()
+PROJECT_NAME_TO_ID = {project['name']: project['id'] for project in SAMPLE_PROJECTS}
+
+for task in SAMPLE_TASKS:
+    if not task.get('project_id'):
+        task['project_id'] = PROJECT_NAME_TO_ID.get(task.get('project_name'))
+
+for asset in SAMPLE_ASSETS:
+    if not asset.get('project_id'):
+        asset['project_id'] = PROJECT_NAME_TO_ID.get(asset.get('project_name'))
+
+
+def find_project_by_id(project_id: int):
+    for company in SAMPLE_COMPANIES:
+        for project in company['projects']:
+            if project['id'] == project_id:
+                return project, company
+    return None, None
+
+
+def ensure_video_items(project_id: int, project: dict = None):
+    if project_id not in PROJECT_VIDEO_ITEMS:
+        if project is None:
+            project, _ = find_project_by_id(project_id)
+        assignee = project.get('assignee', 'テスト') if project else 'テスト'
+        due_date = project.get('due_date', '')
+        defaults = [
+            {
+                'id': next(VIDEO_ITEM_ID_COUNTER),
+                'axis': 'LONG',
+                'title': '長尺動画',
+                'status': '進行中',
+                'assignee': assignee,
+                'planned_start': due_date,
+                'planned_end': due_date
+            },
+            {
+                'id': next(VIDEO_ITEM_ID_COUNTER),
+                'axis': 'SHORT',
+                'title': 'ショート動画',
+                'status': '計画中',
+                'assignee': assignee,
+                'planned_start': due_date,
+                'planned_end': due_date
+            }
+        ]
+        PROJECT_VIDEO_ITEMS[project_id] = defaults
+    return PROJECT_VIDEO_ITEMS[project_id]
+
+
+def ensure_project_comments(project_id: int):
+    if project_id not in PROJECT_COMMENTS:
+        PROJECT_COMMENTS[project_id] = [
+            {
+                'id': next(COMMENT_ID_COUNTER),
+                'author': 'テスト',
+                'content': '素材の確認をお願いします。',
+                'created_at': '2025-04-01 10:00'
+            },
+            {
+                'id': next(COMMENT_ID_COUNTER),
+                'author': 'テスト',
+                'content': '編集作業を開始しました。',
+                'created_at': '2025-04-02 14:30'
+            }
+        ]
+    return PROJECT_COMMENTS[project_id]
+
 
 # 単価表データ（Google Sheetsの単価表シートから）
 SAMPLE_RATE_TABLE = [
@@ -935,23 +1047,31 @@ def build_project_detail_context(project_id):
 
     company = next((c for c in SAMPLE_COMPANIES if c['id'] == project.get('company_id')), None)
 
-    project_tasks = [t for t in SAMPLE_TASKS if t.get('project_name') == project.get('name')]
+    project_tasks = [t for t in SAMPLE_TASKS if t.get('project_id') == project_id]
     if not project_tasks:
-        project_tasks = [
-            {'id': 1, 'title': '動画編集', 'type': 'EDIT', 'status': '完了' if project.get('delivered') else '進行中', 'assignee': project.get('assignee', '未割当'), 'due_date': project.get('due_date', ''), 'priority': '高'},
-            {'id': 2, 'title': 'レビュー', 'type': 'REVIEW', 'status': '完了' if project.get('delivered') else '待機中', 'assignee': 'テスト', 'due_date': project.get('due_date', ''), 'priority': '中'},
-            {'id': 3, 'title': '納品', 'type': 'DELIVERY', 'status': '完了' if project.get('delivered') else '未着手', 'assignee': project.get('assignee', '未割当'), 'due_date': project.get('due_date', ''), 'priority': '高'},
+        defaults = [
+            {'title': '動画編集', 'type': 'EDIT', 'status': '完了' if project.get('delivered') else '進行中', 'assignee': project.get('assignee', '未割当'), 'due_date': project.get('due_date', ''), 'priority': '高'},
+            {'title': 'レビュー', 'type': 'REVIEW', 'status': '完了' if project.get('delivered') else '待機中', 'assignee': 'テスト', 'due_date': project.get('due_date', ''), 'priority': '中'},
+            {'title': '納品', 'type': 'DELIVERY', 'status': '完了' if project.get('delivered') else '未着手', 'assignee': project.get('assignee', '未割当'), 'due_date': project.get('due_date', ''), 'priority': '高'},
         ]
+        for default_task in defaults:
+            task_record = create_task_entry(
+                title=default_task['title'],
+                task_type=default_task['type'],
+                status=default_task['status'],
+                assignee=default_task['assignee'],
+                due_date=default_task['due_date'],
+                priority=default_task['priority'],
+                project=project,
+                project_id=project_id,
+                progress=0
+            )
+            SAMPLE_TASKS.append(task_record)
+            project_tasks.append(task_record)
 
-    video_items = [
-        {'id': 1, 'axis': 'LONG', 'title': '長尺動画', 'status': '進行中', 'assignee': project.get('assignee', 'テスト'), 'planned_start': project.get('due_date', ''), 'planned_end': project.get('due_date', '')},
-        {'id': 2, 'axis': 'SHORT', 'title': 'ショート動画', 'status': '計画中', 'assignee': project.get('assignee', 'テスト'), 'planned_start': project.get('due_date', ''), 'planned_end': project.get('due_date', '')},
-    ]
+    video_items = copy.deepcopy(ensure_video_items(project_id, project))
 
-    comments = [
-        {'id': 1, 'author': 'テスト', 'content': '素材の確認をお願いします。', 'created_at': '2025-04-01 10:00'},
-        {'id': 2, 'author': 'テスト', 'content': '編集作業を開始しました。', 'created_at': '2025-04-02 14:30'},
-    ]
+    comments = copy.deepcopy(ensure_project_comments(project_id))
 
     history = [
         {'id': 1, 'action': '案件作成', 'user': 'テスト', 'timestamp': '2025-03-15 09:00'},
@@ -959,7 +1079,9 @@ def build_project_detail_context(project_id):
         {'id': 3, 'action': '担当者変更', 'user': 'テスト', 'timestamp': '2025-04-01 11:00'},
     ]
 
-    project_assets = [a for a in SAMPLE_ASSETS if a.get('project_name') == project.get('name')]
+    project_assets = [a for a in SAMPLE_ASSETS if a.get('project_id') == project_id]
+    if not project_assets:
+        project_assets = [a for a in SAMPLE_ASSETS if a.get('project_name') == project.get('name')]
 
     return {
         'project': project,
@@ -1260,6 +1382,122 @@ def api_toggle_delivered(project_id):
         }
     })
 
+
+@app.route('/api/projects/<int:project_id>/video-items', methods=['POST'])
+@login_required
+@role_required('admin', 'editor')
+def api_add_video_item(project_id):
+    project, _ = find_project_by_id(project_id)
+    if not project:
+        return jsonify({'status': 'error', 'message': '案件が見つかりません'}), 404
+
+    data = request.get_json() or {}
+    title = (data.get('title') or '').strip()
+    if not title:
+        return jsonify({'status': 'error', 'message': 'タイトルは必須です'}), 400
+
+    axis = (data.get('axis') or 'LONG').upper()
+    if axis not in {'LONG', 'SHORT'}:
+        axis = 'LONG'
+
+    items = ensure_video_items(project_id, project)
+    item = {
+        'id': next(VIDEO_ITEM_ID_COUNTER),
+        'axis': axis,
+        'title': title,
+        'status': data.get('status', '進行中'),
+        'assignee': data.get('assignee', project.get('assignee', '未割当')),
+        'planned_start': data.get('planned_start', ''),
+        'planned_end': data.get('planned_end', '')
+    }
+    items.append(item)
+
+    return jsonify({'status': 'success', 'message': '動画アイテムを追加しました', 'data': item})
+
+
+@app.route('/api/projects/<int:project_id>/tasks', methods=['POST'])
+@login_required
+@role_required('admin', 'editor')
+def api_add_project_task(project_id):
+    project, _ = find_project_by_id(project_id)
+    if not project:
+        return jsonify({'status': 'error', 'message': '案件が見つかりません'}), 404
+
+    data = request.get_json() or {}
+    title = (data.get('title') or '').strip()
+    if not title:
+        return jsonify({'status': 'error', 'message': 'タスク名は必須です'}), 400
+
+    task = create_task_entry(
+        title=title,
+        task_type=data.get('type', 'EDIT'),
+        status=data.get('status', '待機中'),
+        assignee=data.get('assignee', project.get('assignee', '未割当')),
+        due_date=data.get('due_date', ''),
+        priority=data.get('priority', '中'),
+        project=project,
+        project_id=project_id,
+        progress=int(data.get('progress', 0) or 0)
+    )
+    SAMPLE_TASKS.append(task)
+
+    return jsonify({'status': 'success', 'message': 'タスクを追加しました', 'data': task})
+
+
+@app.route('/api/projects/<int:project_id>/assets', methods=['POST'])
+@login_required
+@role_required('admin', 'editor')
+def api_add_project_asset(project_id):
+    project, _ = find_project_by_id(project_id)
+    if not project:
+        return jsonify({'status': 'error', 'message': '案件が見つかりません'}), 404
+
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'status': 'error', 'message': 'ファイル名は必須です'}), 400
+
+    asset = {
+        'id': next_asset_id(),
+        'name': name,
+        'project_name': project.get('name'),
+        'project_id': project_id,
+        'kind': data.get('kind', 'other'),
+        'size': data.get('size', ''),
+        'version': data.get('version', 1),
+        'uploaded_by': g.current_user['name'] if g.current_user else 'システム',
+        'uploaded_at': datetime.now().strftime('%Y-%m-%d'),
+        'url': data.get('url', '')
+    }
+    SAMPLE_ASSETS.append(asset)
+
+    return jsonify({'status': 'success', 'message': '素材を追加しました', 'data': asset})
+
+
+@app.route('/api/projects/<int:project_id>/comments', methods=['POST'])
+@login_required
+@role_required('admin', 'editor')
+def api_add_project_comment(project_id):
+    project, _ = find_project_by_id(project_id)
+    if not project:
+        return jsonify({'status': 'error', 'message': '案件が見つかりません'}), 404
+
+    data = request.get_json() or {}
+    content = (data.get('content') or '').strip()
+    if not content:
+        return jsonify({'status': 'error', 'message': 'コメント内容を入力してください'}), 400
+
+    comments = ensure_project_comments(project_id)
+    comment = {
+        'id': next(COMMENT_ID_COUNTER),
+        'author': g.current_user['name'] if g.current_user else 'システム',
+        'content': content,
+        'created_at': datetime.now().strftime('%Y-%m-%d %H:%M')
+    }
+    comments.append(comment)
+
+    return jsonify({'status': 'success', 'message': 'コメントを追加しました', 'data': comment})
+
 @app.route('/api/data', methods=['GET'])
 def get_data():
     """データ取得API"""
@@ -1409,27 +1647,38 @@ def api_update_task(task_id):
 @app.route('/api/tasks', methods=['POST'])
 def api_create_task():
     """タスク作成API"""
-    data = request.get_json()
+    data = request.get_json() or {}
     
     # バリデーション
     if not data.get('title'):
         return jsonify({'status': 'error', 'message': 'タスク名は必須です'}), 400
     
-    # 新しいタスクを作成
-    new_id = max([t['id'] for t in SAMPLE_TASKS], default=0) + 1
-    
-    new_task = {
-        'id': new_id,
-        'title': data.get('title'),
-        'project_name': data.get('project_name', ''),
-        'type': data.get('type', 'EDIT'),
-        'status': data.get('status', '待機中'),
-        'assignee': data.get('assignee', 'テスト'),
-        'due_date': data.get('due_date', ''),
-        'priority': data.get('priority', '中')
-    }
-    
-    # サンプルデータに追加（実際の実装ではデータベースに保存）
+    project_id = data.get('project_id')
+    project = None
+    if project_id:
+        project, _ = find_project_by_id(project_id)
+        if not project:
+            return jsonify({'status': 'error', 'message': '対象の案件が見つかりません'}), 404
+        data['project_name'] = project.get('name')
+    else:
+        project_name = data.get('project_name')
+        if project_name:
+            project_id = PROJECT_NAME_TO_ID.get(project_name)
+            if project_id:
+                project, _ = find_project_by_id(project_id)
+
+    new_task = create_task_entry(
+        title=data.get('title'),
+        task_type=data.get('type', 'EDIT'),
+        status=data.get('status', '待機中'),
+        assignee=data.get('assignee', 'テスト'),
+        due_date=data.get('due_date', ''),
+        priority=data.get('priority', '中'),
+        project=project,
+        project_id=project_id,
+        progress=data.get('progress', 0)
+    )
+
     SAMPLE_TASKS.append(new_task)
     
     return jsonify({

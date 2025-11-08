@@ -3488,3 +3488,10 @@ section h3 {
 .form-message.error {
     color: #c92a2a;
 }
+
+.form-text {
+    display: block;
+    font-size: 0.8em;
+    color: #666;
+    margin-top: 4px;
+}
