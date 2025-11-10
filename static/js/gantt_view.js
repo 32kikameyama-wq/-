@@ -63,6 +63,7 @@
 
     function cacheRefs() {
         refs.container = document.getElementById('gantt-container');
+        refs.viewport = document.querySelector('.gantt-viewport');
         refs.emptyState = document.getElementById('gantt-empty-state');
         refs.addButton = document.getElementById('gantt-add-task-btn');
         refs.refreshButton = document.getElementById('gantt-refresh-btn');
@@ -259,11 +260,23 @@
             if (refs.emptyState) {
                 refs.emptyState.hidden = false;
             }
+            refs.container.style.visibility = 'hidden';
+            if (refs.viewport) {
+                refs.viewport.scrollLeft = 0;
+            }
             return;
+        }
+
+        if (refs.container.style.visibility !== 'visible') {
+            refs.container.style.visibility = 'visible';
         }
 
         if (refs.emptyState) {
             refs.emptyState.hidden = true;
+        }
+
+        if (refs.viewport) {
+            refs.viewport.scrollLeft = 0;
         }
 
         const data = tasks.map(task => convertToGanttItem(task));
@@ -278,6 +291,10 @@
             on_date_change: (task, start, end) => handleDateChange(task, start, end),
             on_progress_change: (task, progress) => handleProgressChange(task, progress)
         });
+
+        if (refs.viewport) {
+            refs.viewport.scrollLeft = 0;
+        }
     }
 
     function convertToGanttItem(task) {
@@ -393,6 +410,7 @@
 
         if (showLoading) {
             refs.container?.classList.add('loading');
+            refs.viewport?.classList.add('is-loading');
         }
 
         fetch(`/api/gantt/tasks?${params.toString()}`)
@@ -427,6 +445,7 @@
             })
             .finally(() => {
                 refs.container?.classList.remove('loading');
+                refs.viewport?.classList.remove('is-loading');
             });
     }
 

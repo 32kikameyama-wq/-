@@ -81,10 +81,12 @@
 
 <div class="gantt-layout">
     <div class="gantt-main">
-        <div id="gantt-container" class="gantt-container" aria-label="Gantt chart timeline"></div>
-        <div id="gantt-empty-state" class="gantt-empty-state" hidden>
-            <p>条件に一致するタスクがありません。</p>
-            <button class="btn btn-primary" id="gantt-empty-add-btn">タスクを追加する</button>
+        <div class="gantt-viewport">
+            <div id="gantt-container" class="gantt-container" aria-label="Gantt chart timeline"></div>
+            <div id="gantt-empty-state" class="gantt-empty-state" hidden>
+                <p>条件に一致するタスクがありません。</p>
+                <button class="btn btn-primary" id="gantt-empty-add-btn">タスクを追加する</button>
+            </div>
         </div>
     </div>
     <aside class="gantt-side-panel" id="gantt-side-panel" aria-label="Task detail panel">
