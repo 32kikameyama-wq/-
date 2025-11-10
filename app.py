@@ -712,238 +712,6 @@ SAMPLE_CLIENTS = [
     }
 ]
 
-SAMPLE_TASKS = [
-    {
-        'id': 1,
-        'title': 'キックオフ＆要件確認',
-        'project_name': '監査',
-        'type': 'PLAN',
-        'status': '完了',
-        'assignee': '田中',
-        'priority': '高',
-        'progress': 100,
-        'due_date': '2025-03-18',
-        'plan_start': '2025-03-15',
-        'plan_end': '2025-03-18',
-        'actual_start': '2025-03-15',
-        'actual_end': '2025-03-17',
-        'order_index': 1,
-        'project_id': 1,
-        'dependencies': [],
-        'created_by': '管理者',
-        'updated_by': '管理者',
-        'updated_at': '2025-03-17 12:00',
-        'notes': 'クライアントと初回定例実施',
-        'history': []
-    },
-    {
-        'id': 2,
-        'title': '構成案作成',
-        'project_name': '監査',
-        'type': 'SCRIPT',
-        'status': '進行中',
-        'assignee': '田中',
-        'priority': '高',
-        'progress': 55,
-        'due_date': '2025-03-25',
-        'plan_start': '2025-03-18',
-        'plan_end': '2025-03-25',
-        'actual_start': '2025-03-19',
-        'actual_end': '',
-        'order_index': 2,
-        'project_id': 1,
-        'dependencies': [{'task_id': 1, 'type': 'FS'}],
-        'created_by': '管理者',
-        'updated_by': '田中',
-        'updated_at': '2025-03-24 18:10',
-        'notes': '監査手順の図解を準備',
-        'history': []
-    },
-    {
-        'id': 3,
-        'title': '長尺編集（ver1）',
-        'project_name': '監査',
-        'type': 'EDIT',
-        'status': '進行中',
-        'assignee': '(完)テスト',
-        'priority': '高',
-        'progress': 40,
-        'due_date': '2025-04-05',
-        'plan_start': '2025-03-26',
-        'plan_end': '2025-04-04',
-        'actual_start': '2025-03-27',
-        'actual_end': '',
-        'order_index': 3,
-        'project_id': 1,
-        'dependencies': [{'task_id': 2, 'type': 'FS'}],
-        'created_by': '管理者',
-        'updated_by': '(完)テスト',
-        'updated_at': '2025-04-02 20:30',
-        'notes': '尺14分→12分へ調整中',
-        'history': []
-    },
-    {
-        'id': 4,
-        'title': 'ナレーション収録',
-        'project_name': '構造',
-        'type': 'SHOOT',
-        'status': '完了',
-        'assignee': '佐藤',
-        'priority': '中',
-        'progress': 100,
-        'due_date': '2025-03-28',
-        'plan_start': '2025-03-25',
-        'plan_end': '2025-03-28',
-        'actual_start': '2025-03-25',
-        'actual_end': '2025-03-27',
-        'order_index': 4,
-        'project_id': 2,
-        'dependencies': [],
-        'created_by': '管理者',
-        'updated_by': '佐藤',
-        'updated_at': '2025-03-27 16:10',
-        'notes': '原稿ブラッシュアップ済み',
-        'history': []
-    },
-    {
-        'id': 5,
-        'title': '図版ラフ制作',
-        'project_name': '構造',
-        'type': 'OTHER',
-        'status': '進行中',
-        'assignee': '鈴木',
-        'priority': '中',
-        'progress': 65,
-        'due_date': '2025-04-06',
-        'plan_start': '2025-03-29',
-        'plan_end': '2025-04-05',
-        'actual_start': '2025-03-30',
-        'actual_end': '',
-        'order_index': 5,
-        'project_id': 2,
-        'dependencies': [{'task_id': 4, 'type': 'FS'}],
-        'created_by': '佐藤',
-        'updated_by': '鈴木',
-        'updated_at': '2025-04-03 19:45',
-        'notes': '3D化パートのラフ4点作成済み',
-        'history': []
-    },
-    {
-        'id': 6,
-        'title': '企業紹介動画：取材',
-        'project_name': '企業紹介動画制作',
-        'type': 'SHOOT',
-        'status': '進行中',
-        'assignee': '佐藤',
-        'priority': '高',
-        'progress': 80,
-        'due_date': '2025-04-08',
-        'plan_start': '2025-03-31',
-        'plan_end': '2025-04-08',
-        'actual_start': '2025-03-31',
-        'actual_end': '',
-        'order_index': 6,
-        'project_id': 5,
-        'dependencies': [],
-        'created_by': '管理者',
-        'updated_by': '佐藤',
-        'updated_at': '2025-04-04 10:00',
-        'notes': '社長インタビュー完了、工場映像残り',
-        'history': []
-    },
-    {
-        'id': 7,
-        'title': '企業紹介動画：編集第1稿',
-        'project_name': '企業紹介動画制作',
-        'type': 'EDIT',
-        'status': '待機中',
-        'assignee': '(完)テスト',
-        'priority': '高',
-        'progress': 0,
-        'due_date': '2025-04-15',
-        'plan_start': '2025-04-09',
-        'plan_end': '2025-04-14',
-        'actual_start': '',
-        'actual_end': '',
-        'order_index': 7,
-        'project_id': 5,
-        'dependencies': [{'task_id': 6, 'type': 'FS'}],
-        'created_by': '佐藤',
-        'updated_by': '管理者',
-        'updated_at': '2025-04-04 10:00',
-        'notes': '素材整理完了後に着手予定',
-        'history': []
-    },
-    {
-        'id': 8,
-        'title': 'ショート動画企画立案',
-        'project_name': 'SNS用ショート動画',
-        'type': 'PLAN',
-        'status': '完了',
-        'assignee': '山本',
-        'priority': '中',
-        'progress': 100,
-        'due_date': '2025-03-05',
-        'plan_start': '2025-02-26',
-        'plan_end': '2025-03-05',
-        'actual_start': '2025-02-26',
-        'actual_end': '2025-03-04',
-        'order_index': 8,
-        'project_id': 6,
-        'dependencies': [],
-        'created_by': '山本',
-        'updated_by': '山本',
-        'updated_at': '2025-03-04 17:20',
-        'notes': 'TikTok向け5案承認済み',
-        'history': []
-    },
-    {
-        'id': 9,
-        'title': '縦型編集＆字幕入れ',
-        'project_name': 'SNS用ショート動画',
-        'type': 'EDIT',
-        'status': '完了',
-        'assignee': '(完)テスト',
-        'priority': '高',
-        'progress': 100,
-        'due_date': '2025-03-18',
-        'plan_start': '2025-03-06',
-        'plan_end': '2025-03-17',
-        'actual_start': '2025-03-06',
-        'actual_end': '2025-03-16',
-        'order_index': 9,
-        'project_id': 6,
-        'dependencies': [{'task_id': 8, 'type': 'FS'}],
-        'created_by': '山本',
-        'updated_by': '(完)テスト',
-        'updated_at': '2025-03-16 15:00',
-        'notes': '3本とも投稿準備完了',
-        'history': []
-    },
-    {
-        'id': 10,
-        'title': '納品＆成果レポート',
-        'project_name': 'SNS用ショート動画',
-        'type': 'DELIVERY',
-        'status': '進行中',
-        'assignee': '山本',
-        'priority': '中',
-        'progress': 30,
-        'due_date': '2025-03-25',
-        'plan_start': '2025-03-18',
-        'plan_end': '2025-03-24',
-        'actual_start': '2025-03-19',
-        'actual_end': '',
-        'order_index': 10,
-        'project_id': 6,
-        'dependencies': [{'task_id': 9, 'type': 'FS'}],
-        'created_by': '山本',
-        'updated_by': '山本',
-        'updated_at': '2025-03-21 11:30',
-        'notes': 'インサイト計測中',
-        'history': []
-    }
-]
 
 SAMPLE_ASSETS = [
     {
@@ -978,9 +746,238 @@ SAMPLE_ASSETS = [
     }
 ]
 
+TASK_ID_COUNTER = count(20000)
+PROJECT_GANTT_TASKS: dict[int, list[dict]] = {}
+GENERAL_TASKS: list[dict] = []
+TASK_CACHE: list[dict] = []
+
+AUTO_STAGE_TEMPLATES = [
+    {'key': 'plan', 'title': '企画・準備', 'duration': 4},
+    {'key': 'materials', 'title': '素材整理・収集', 'duration': 3},
+    {'key': 'edit', 'title': '編集', 'duration': 5},
+    {'key': 'review', 'title': 'レビュー・調整', 'duration': 3},
+    {'key': 'delivery', 'title': '納品', 'duration': 1},
+]
+
+
+def parse_iso_date(value, fallback=None):
+    if not value:
+        return fallback
+    try:
+        return datetime.strptime(value, '%Y-%m-%d').date()
+    except (TypeError, ValueError):
+        return fallback
+
+
+def isoformat_date(date_obj):
+    return date_obj.strftime('%Y-%m-%d')
+
 
 def next_task_id():
-    return max([t['id'] for t in SAMPLE_TASKS], default=0) + 1
+    return next(TASK_ID_COUNTER)
+
+
+def build_auto_gantt_tasks(project: dict, company_name: str):
+    axis = project.get('video_axis', 'LONG')
+    stage_templates = []
+    for template in AUTO_STAGE_TEMPLATES:
+        tpl = template.copy()
+        if tpl['key'] == 'edit':
+            tpl['duration'] = 5 if axis == 'LONG' else 3
+        if tpl['key'] == 'delivery':
+            tpl['duration'] = 1 if project.get('delivered') else tpl['duration']
+        stage_templates.append(tpl)
+
+    default_due = datetime.now().date() + timedelta(days=21)
+    due_date = parse_iso_date(project.get('due_date'), default_due)
+    if due_date < datetime.now().date():
+        due_date = datetime.now().date() + timedelta(days=3)
+
+    stages = []
+    cursor = due_date
+    for template in reversed(stage_templates):
+        duration = max(1, template['duration'])
+        stage_end = cursor
+        stage_start = cursor - timedelta(days=duration - 1)
+        if stage_start > stage_end:
+            stage_start = stage_end
+        stages.append({
+            'key': template['key'],
+            'title': template['title'],
+            'plan_start': stage_start,
+            'plan_end': stage_end,
+            'duration': duration
+        })
+        cursor = stage_start - timedelta(days=1)
+    stages.reverse()
+
+    stage_order = {stage['key']: idx for idx, stage in enumerate(stages)}
+    status_stage_map = {
+        '計画中': 'plan',
+        '進行中': 'edit',
+        'レビュー中': 'review',
+        '納品待ち': 'delivery',
+        '完了': 'delivery'
+    }
+    current_stage_key = status_stage_map.get(project.get('status'), 'edit')
+    if project.get('delivered'):
+        current_stage_key = 'delivery'
+    current_index = stage_order.get(current_stage_key, 2)
+
+    auto_tasks = []
+    previous_task_id = None
+
+    for idx, stage in enumerate(stages):
+        task_id = project['id'] * 100 + (idx + 1)
+        if project.get('delivered') or project.get('status') == '完了':
+            status = '完了'
+        elif idx < current_index:
+            status = '完了'
+        elif idx == current_index:
+            status = 'レビュー中' if stage['key'] == 'review' and project.get('status') == 'レビュー中' else '進行中'
+        else:
+            status = '未着手'
+
+        if status == '完了':
+            progress = 100
+        elif status == 'レビュー中':
+            progress = 80
+        elif status == '進行中':
+            progress = 60
+        else:
+            progress = 0
+
+        plan_start = isoformat_date(stage['plan_start'])
+        plan_end = isoformat_date(stage['plan_end'])
+
+        if status == '完了':
+            actual_start = plan_start
+            actual_end = plan_end
+        elif status in {'レビュー中', '進行中'}:
+            actual_start = plan_start
+            actual_end = ''
+        else:
+            actual_start = ''
+            actual_end = ''
+
+        dependencies = []
+        if previous_task_id:
+            dependencies.append({'task_id': previous_task_id, 'type': 'FS'})
+
+        task = {
+            'id': task_id,
+            'title': stage['title'],
+            'project_id': project['id'],
+            'project_name': project.get('name'),
+            'company_name': company_name,
+            'type': 'AUTO',
+            'status': status,
+            'assignee': project.get('assignee', '未割当'),
+            'priority': '高' if idx <= 2 else '中',
+            'progress': progress,
+            'due_date': plan_end,
+            'plan_start': plan_start,
+            'plan_end': plan_end,
+            'actual_start': actual_start,
+            'actual_end': actual_end,
+            'order_index': idx + 1,
+            'dependencies': dependencies,
+            'created_by': 'システム',
+            'updated_by': 'システム',
+            'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
+            'notes': f"{project.get('video_axis', 'LONG')} / {project.get('status', '-')}",
+            'history': [],
+            'task_origin': 'auto',
+            'auto_stage': stage['key'],
+            'auto_generated_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
+            'user_modified': False
+        }
+        auto_tasks.append(task)
+        previous_task_id = task_id
+
+    return auto_tasks
+
+
+def initialize_project_gantt_tasks(project: dict, company_name: str):
+    project_id = project['id']
+    project_tasks = PROJECT_GANTT_TASKS.setdefault(project_id, [])
+    existing_auto = {task.get('auto_stage'): task for task in project_tasks if task.get('task_origin') == 'auto'}
+    generated = build_auto_gantt_tasks(project, company_name)
+
+    seen_stages = set()
+    for auto_task in generated:
+        stage = auto_task['auto_stage']
+        seen_stages.add(stage)
+        if stage in existing_auto:
+            existing = existing_auto[stage]
+            existing.update({
+                'project_name': auto_task['project_name'],
+                'company_name': auto_task['company_name'],
+                'plan_start': auto_task['plan_start'],
+                'plan_end': auto_task['plan_end'],
+                'due_date': auto_task['due_date'],
+                'dependencies': auto_task['dependencies'],
+                'order_index': auto_task['order_index'],
+                'auto_generated_at': auto_task['auto_generated_at'],
+                'assignee': auto_task['assignee']
+            })
+            if not existing.get('user_modified'):
+                existing['status'] = auto_task['status']
+                existing['progress'] = auto_task['progress']
+                existing['actual_start'] = auto_task['actual_start']
+                existing['actual_end'] = auto_task['actual_end']
+            existing.setdefault('task_origin', 'auto')
+            existing.setdefault('history', [])
+        else:
+            project_tasks.append(auto_task)
+
+    project_tasks[:] = sorted(project_tasks, key=lambda t: (t.get('order_index') or 9999, t.get('id')))
+
+
+def rebuild_task_cache():
+    global TASK_CACHE
+    tasks = []
+    for project_id in sorted(PROJECT_GANTT_TASKS.keys()):
+        for task in PROJECT_GANTT_TASKS[project_id]:
+            tasks.append(copy.deepcopy(task))
+    tasks.extend(copy.deepcopy(GENERAL_TASKS))
+    TASK_CACHE = tasks
+
+
+def get_all_tasks():
+    if not TASK_CACHE:
+        rebuild_task_cache()
+    return copy.deepcopy(TASK_CACHE)
+
+
+def get_project_tasks(project_id: int):
+    tasks = PROJECT_GANTT_TASKS.get(project_id, [])
+    return copy.deepcopy(sorted(tasks, key=lambda t: (t.get('order_index') or 9999, t.get('id'))))
+
+
+def find_task_with_container(task_id: int):
+    for project_id, tasks in PROJECT_GANTT_TASKS.items():
+        for task in tasks:
+            if task.get('id') == task_id:
+                return task, tasks
+    for task in GENERAL_TASKS:
+        if task.get('id') == task_id:
+            return task, GENERAL_TASKS
+    return None, None
+
+
+def initialize_all_project_tasks():
+    for company in SAMPLE_COMPANIES:
+        for project in company['projects']:
+            initialize_project_gantt_tasks(project, company['name'])
+    rebuild_task_cache()
+
+
+initialize_all_project_tasks()
+
+
+def next_task_id():
+    return next(TASK_ID_COUNTER)
 
 
 def next_asset_id():
@@ -1005,15 +1002,14 @@ def create_task_entry(
     dependencies=None,
     created_by: str = None,
     updated_by: str = None,
-    notes: str = ''
+    notes: str = '',
+    origin: str = 'manual'
 ):
     project_name = ''
     if project:
         project_name = project.get('name', '')
         project_id = project.get('id')
-    task_type = task_type.upper()
-    if order_index is None:
-        order_index = len(SAMPLE_TASKS) + 1
+    task_type = (task_type or 'OTHER').upper()
     normalized_dependencies = []
     if dependencies:
         for dep in dependencies:
@@ -1034,7 +1030,7 @@ def create_task_entry(
             plan_start = ''
     if not plan_end:
         plan_end = due_date or plan_start
-    return {
+    task = {
         'id': next_task_id(),
         'title': title,
         'project_name': project_name,
@@ -1055,15 +1051,19 @@ def create_task_entry(
         'updated_by': updated_by or (g.current_user['name'] if getattr(g, 'current_user', None) else 'システム'),
         'updated_at': now_str,
         'notes': notes,
-        'history': []
+        'history': [],
+        'task_origin': origin,
+        'user_modified': origin != 'auto'
     }
+    return task
 
 
 TASK_DEPENDENCY_TYPES = {'FS', 'SS', 'FF', 'SF'}
 
 
 def find_task(task_id: int):
-    return next((t for t in SAMPLE_TASKS if t.get('id') == task_id), None)
+    task, _ = find_task_with_container(task_id)
+    return task
 
 
 def record_task_history(task: dict, field: str, old_value, new_value, actor: str):
@@ -1094,6 +1094,7 @@ def serialize_gantt_task(task: dict):
         'title': task.get('title'),
         'project_id': task.get('project_id'),
         'project_name': task.get('project_name'),
+        'company_name': task.get('company_name'),
         'assignee': task.get('assignee'),
         'status': task.get('status'),
         'priority': task.get('priority'),
@@ -1112,6 +1113,7 @@ def serialize_gantt_task(task: dict):
         'updated_by': task.get('updated_by'),
         'created_by': task.get('created_by'),
         'history': task.get('history', [])[:10],  # 最新10件まで
+        'task_origin': task.get('task_origin', 'manual')
     }
 
 
@@ -1200,22 +1202,6 @@ def get_all_projects():
 
 SAMPLE_PROJECTS = get_all_projects()
 PROJECT_NAME_TO_ID = {project['name']: project['id'] for project in SAMPLE_PROJECTS}
-
-for task in SAMPLE_TASKS:
-    if not task.get('project_id'):
-        task['project_id'] = PROJECT_NAME_TO_ID.get(task.get('project_name'))
-    task.setdefault('progress', 0)
-    task.setdefault('plan_start', '')
-    task.setdefault('plan_end', task.get('due_date', ''))
-    task.setdefault('actual_start', '')
-    task.setdefault('actual_end', '')
-    task.setdefault('order_index', SAMPLE_TASKS.index(task) + 1)
-    task.setdefault('dependencies', [])
-    task.setdefault('notes', '')
-    task.setdefault('history', [])
-    task.setdefault('created_by', '管理者')
-    task.setdefault('updated_by', '管理者')
-    task.setdefault('updated_at', datetime.now().strftime('%Y-%m-%d %H:%M'))
 
 for asset in SAMPLE_ASSETS:
     if not asset.get('project_id'):
@@ -1337,13 +1323,20 @@ def index():
         })
     
     # タスク統計を計算
-    total_tasks = len(SAMPLE_TASKS)
-    active_tasks = len([t for t in SAMPLE_TASKS if t['status'] in ['進行中', '待機中']])
-    completed_tasks = len([t for t in SAMPLE_TASKS if t['status'] == '完了'])
-    pending_tasks = len([t for t in SAMPLE_TASKS if t['status'] == '待機中'])
+    all_tasks = get_all_tasks()
+    total_tasks = len(all_tasks)
+    active_tasks = len([t for t in all_tasks if t['status'] in ['進行中', '待機中', 'レビュー中']])
+    completed_tasks = len([t for t in all_tasks if t['status'] == '完了'])
+    pending_tasks = len([t for t in all_tasks if t['status'] in ['未着手', '待機中']])
     
     # 最近のタスク（優先度順、期限順）
-    recent_tasks = sorted(SAMPLE_TASKS, key=lambda x: (x.get('priority', '中') == '高', x.get('due_date', '')), reverse=True)[:5]
+    recent_tasks = sorted(
+        all_tasks,
+        key=lambda x: (
+            0 if x.get('priority') == '高' else 1,
+            x.get('due_date') or ''
+        )
+    )[:5]
     
     stats = {
         'total_projects': total_projects,
@@ -1418,27 +1411,8 @@ def build_project_detail_context(project_id):
 
     company = next((c for c in SAMPLE_COMPANIES if c['id'] == project.get('company_id')), None)
 
-    project_tasks = [t for t in SAMPLE_TASKS if t.get('project_id') == project_id]
-    if not project_tasks:
-        defaults = [
-            {'title': '動画編集', 'type': 'EDIT', 'status': '完了' if project.get('delivered') else '進行中', 'assignee': project.get('assignee', '未割当'), 'due_date': project.get('due_date', ''), 'priority': '高'},
-            {'title': 'レビュー', 'type': 'REVIEW', 'status': '完了' if project.get('delivered') else '待機中', 'assignee': 'テスト', 'due_date': project.get('due_date', ''), 'priority': '中'},
-            {'title': '納品', 'type': 'DELIVERY', 'status': '完了' if project.get('delivered') else '未着手', 'assignee': project.get('assignee', '未割当'), 'due_date': project.get('due_date', ''), 'priority': '高'},
-        ]
-        for default_task in defaults:
-            task_record = create_task_entry(
-                title=default_task['title'],
-                task_type=default_task['type'],
-                status=default_task['status'],
-                assignee=default_task['assignee'],
-                due_date=default_task['due_date'],
-                priority=default_task['priority'],
-                project=project,
-                project_id=project_id,
-                progress=0
-            )
-            SAMPLE_TASKS.append(task_record)
-            project_tasks.append(task_record)
+    initialize_project_gantt_tasks(project, company['name'] if company else project.get('company'))
+    project_tasks = get_project_tasks(project_id)
 
     video_items = copy.deepcopy(ensure_video_items(project_id, project))
 
@@ -1622,12 +1596,19 @@ def api_update_project(project_id):
     project['script_url'] = data.get('script_url', project.get('script_url', ''))
     project['delivery_date'] = data.get('delivery_date', project.get('delivery_date', ''))
     project['delivered'] = data.get('delivered', project.get('delivered', False))
+
+    if company:
+        initialize_project_gantt_tasks(project, company['name'])
+        rebuild_task_cache()
     
     # 案件名が変更された場合、関連するタスクの案件名も更新
     if old_project_name and new_project_name != old_project_name:
-        for task in SAMPLE_TASKS:
-            if task.get('project_name') == old_project_name:
-                task['project_name'] = new_project_name
+        for task in PROJECT_GANTT_TASKS.get(project_id, []):
+            task['project_name'] = new_project_name
+        for manual_task in GENERAL_TASKS:
+            if manual_task.get('project_id') == project_id:
+                manual_task['project_name'] = new_project_name
+        rebuild_task_cache()
     
     # 進捗を計算（納品済みなら100%）
     if project['delivered']:
@@ -1640,6 +1621,10 @@ def api_update_project(project_id):
         project['progress'] = 70
     else:
         project['progress'] = 10
+
+    global SAMPLE_PROJECTS, PROJECT_NAME_TO_ID
+    SAMPLE_PROJECTS = get_all_projects()
+    PROJECT_NAME_TO_ID = {proj['name']: proj['id'] for proj in SAMPLE_PROJECTS}
     
     return jsonify({
         'status': 'success',
@@ -1693,6 +1678,11 @@ def api_create_project():
     # 実際の実装ではデータベースに保存
     # ここではサンプルデータに追加
     company['projects'].append(new_project)
+    initialize_project_gantt_tasks(new_project, company['name'])
+    rebuild_task_cache()
+    global SAMPLE_PROJECTS, PROJECT_NAME_TO_ID
+    SAMPLE_PROJECTS = get_all_projects()
+    PROJECT_NAME_TO_ID = {project['name']: project['id'] for project in SAMPLE_PROJECTS}
     
     return jsonify({
         'status': 'success',
@@ -1743,6 +1733,10 @@ def api_toggle_delivered(project_id):
         project['status'] = '完了'
     elif not delivered:
         project['delivery_date'] = ''
+
+    if company:
+        initialize_project_gantt_tasks(project, company['name'])
+        rebuild_task_cache()
     
     return jsonify({
         'status': 'success',
@@ -1758,7 +1752,8 @@ def api_toggle_delivered(project_id):
 @login_required
 @role_required('admin', 'editor')
 def api_add_video_item(project_id):
-    project, _ = find_project_by_id(project_id)
+    project, company = find_project_by_id(project_id)
+    company_name = company['name'] if company else None
     if not project:
         return jsonify({'status': 'error', 'message': '案件が見つかりません'}), 404
 
@@ -1790,7 +1785,7 @@ def api_add_video_item(project_id):
 @login_required
 @role_required('admin', 'editor')
 def api_add_project_task(project_id):
-    project, _ = find_project_by_id(project_id)
+    project, company = find_project_by_id(project_id)
     if not project:
         return jsonify({'status': 'error', 'message': '案件が見つかりません'}), 404
 
@@ -1798,6 +1793,7 @@ def api_add_project_task(project_id):
     title = (data.get('title') or '').strip()
     if not title:
         return jsonify({'status': 'error', 'message': 'タスク名は必須です'}), 400
+    company_name = company['name'] if company else None
 
     task = create_task_entry(
         title=title,
@@ -1814,9 +1810,17 @@ def api_add_project_task(project_id):
         actual_start=data.get('actual_start', ''),
         actual_end=data.get('actual_end', ''),
         dependencies=data.get('dependencies'),
-        notes=data.get('notes', '')
+        notes=data.get('notes', ''),
+        origin='manual'
     )
-    SAMPLE_TASKS.append(task)
+    project_tasks = PROJECT_GANTT_TASKS.setdefault(project_id, [])
+    if company_name:
+        task['company_name'] = company_name
+    if not task.get('order_index'):
+        task['order_index'] = len(project_tasks) + 1
+    project_tasks.append(task)
+    project_tasks.sort(key=lambda t: (t.get('order_index') or 9999, t.get('id')))
+    rebuild_task_cache()
 
     return jsonify({'status': 'success', 'message': 'タスクを追加しました', 'data': task})
 
@@ -1905,7 +1909,7 @@ def task_dashboard():
     from datetime import date, timedelta
     
     # 自分のタスクのみを表示（実際の実装ではログインユーザーのタスクを取得）
-    my_tasks = SAMPLE_TASKS
+    my_tasks = get_all_tasks()
     
     # 今日の日付を取得
     today = date.today()
@@ -1962,7 +1966,7 @@ def tasks():
     """タスク作成（自分のタスク）"""
     # 自分のタスクのみを表示（実際の実装ではログインユーザーのタスクを取得）
     # 現在はサンプルデータをそのまま使用
-    my_tasks = SAMPLE_TASKS  # 将来的には、自分のタスクのみをフィルタリング
+    my_tasks = get_all_tasks()  # 将来的には、自分のタスクのみをフィルタリング
     
     # 今日の日付を取得（期限超過の判定用）
     from datetime import date
@@ -1980,13 +1984,13 @@ def api_tasks():
     """タスク一覧API"""
     return jsonify({
         'status': 'success',
-        'data': SAMPLE_TASKS
+        'data': get_all_tasks()
     })
 
 @app.route('/api/tasks/<int:task_id>')
 def api_task_detail(task_id):
     """タスク詳細API"""
-    task = next((t for t in SAMPLE_TASKS if t['id'] == task_id), None)
+    task = find_task(task_id)
     if not task:
         return jsonify({'status': 'error', 'message': 'タスクが見つかりません'}), 404
     
@@ -2000,7 +2004,8 @@ def api_task_detail(task_id):
 @login_required
 def api_gantt_tasks():
     current_user = g.current_user
-    user_tasks = filter_tasks_for_user(SAMPLE_TASKS, current_user)
+    all_tasks = get_all_tasks()
+    user_tasks = filter_tasks_for_user(all_tasks, current_user)
 
     params = {
         'project_id': request.args.get('project_id'),
@@ -2062,14 +2067,22 @@ def api_gantt_reorder():
 
     actor = g.current_user['name'] if g.current_user else 'システム'
     updated = []
+    affected_containers = set()
     for index, task_id in enumerate(order, start=1):
-        task = find_task(task_id)
+        task, container = find_task_with_container(task_id)
         if not task:
             continue
         record_task_history(task, 'order_index', task.get('order_index'), index, actor)
         task['order_index'] = index
         update_task_metadata(task, actor)
         updated.append(task_id)
+        if container is not None:
+            affected_containers.add(id(container))
+
+    for project_id, tasks in PROJECT_GANTT_TASKS.items():
+        tasks.sort(key=lambda t: (t.get('order_index') or 9999, t.get('id')))
+    GENERAL_TASKS.sort(key=lambda t: (t.get('due_date') or '', t.get('id')))
+    rebuild_task_cache()
 
     return jsonify({
         'status': 'success',
@@ -2083,7 +2096,7 @@ def api_gantt_reorder():
 def api_update_task(task_id):
     """タスク更新API"""
     data = request.get_json() or {}
-    task = find_task(task_id)
+    task, container = find_task_with_container(task_id)
     
     if not task:
         return jsonify({'status': 'error', 'message': 'タスクが見つかりません'}), 404
@@ -2127,6 +2140,21 @@ def api_update_task(task_id):
                 project, _ = find_project_by_id(new_project_id)
         record_task_history(task, 'project_id', task.get('project_id'), new_project_id, actor)
         record_task_history(task, 'project_name', task.get('project_name'), new_project_name, actor)
+
+        if container is GENERAL_TASKS and new_project_id:
+            GENERAL_TASKS.remove(task)
+            container = PROJECT_GANTT_TASKS.setdefault(new_project_id, [])
+            if not task.get('order_index'):
+                task['order_index'] = len(container) + 1
+            container.append(task)
+        elif container is not GENERAL_TASKS and new_project_id and task.get('project_id') != new_project_id:
+            # move between project lists
+            if container:
+                container.remove(task)
+            destination = PROJECT_GANTT_TASKS.setdefault(new_project_id, [])
+            destination.append(task)
+            container = destination
+
         task['project_id'] = new_project_id
         task['project_name'] = new_project_name
 
@@ -2149,6 +2177,13 @@ def api_update_task(task_id):
         task['dependencies'] = normalized
 
     update_task_metadata(task, actor)
+    if task.get('task_origin') == 'auto':
+        task['user_modified'] = True
+
+    for project_id, tasks in PROJECT_GANTT_TASKS.items():
+        tasks.sort(key=lambda t: (t.get('order_index') or 9999, t.get('id')))
+    GENERAL_TASKS.sort(key=lambda t: (t.get('due_date') or '', t.get('id')))
+    rebuild_task_cache()
     
     return jsonify({
         'status': 'success',
@@ -2169,17 +2204,22 @@ def api_create_task():
     
     project_id = data.get('project_id')
     project = None
+    company = None
+    company_name = None
     if project_id:
-        project, _ = find_project_by_id(project_id)
+        project, company = find_project_by_id(project_id)
         if not project:
             return jsonify({'status': 'error', 'message': '対象の案件が見つかりません'}), 404
         data['project_name'] = project.get('name')
+        company_name = company['name'] if company else None
     else:
         project_name = data.get('project_name')
         if project_name:
             project_id = PROJECT_NAME_TO_ID.get(project_name)
             if project_id:
-                project, _ = find_project_by_id(project_id)
+                project, company = find_project_by_id(project_id)
+                if project:
+                    company_name = company['name'] if company else None
 
     new_task = create_task_entry(
         title=data.get('title'),
@@ -2200,7 +2240,17 @@ def api_create_task():
         notes=data.get('notes', '')
     )
 
-    SAMPLE_TASKS.append(new_task)
+    if project_id:
+        project_tasks = PROJECT_GANTT_TASKS.setdefault(project_id, [])
+        if project and project_id and company_name:
+            new_task['company_name'] = company_name
+        if not new_task.get('order_index'):
+            new_task['order_index'] = len(project_tasks) + 1
+        project_tasks.append(new_task)
+        project_tasks.sort(key=lambda t: (t.get('order_index') or 9999, t.get('id')))
+    else:
+        GENERAL_TASKS.append(new_task)
+    rebuild_task_cache()
     
     return jsonify({
         'status': 'success',
@@ -2369,8 +2419,9 @@ def editor_dashboard():
     }
 
     today_str = datetime.now().date().isoformat()
+    all_tasks = get_all_tasks()
     today_tasks = [
-        t for t in SAMPLE_TASKS
+        t for t in all_tasks
         if t.get('due_date') == today_str and t.get('assignee') == 'テスト'
     ]
 
@@ -2509,7 +2560,7 @@ def editor_input_videos():
 @login_required
 @role_required('admin', 'editor')
 def editor_gantt():
-    user_tasks = filter_tasks_for_user(SAMPLE_TASKS, g.current_user)
+    user_tasks = filter_tasks_for_user(get_all_tasks(), g.current_user)
     serialized_tasks = [serialize_gantt_task(task) for task in filter_tasks_by_params(user_tasks, {})]
     filters = collect_task_filters(user_tasks)
     return render_template(
@@ -3192,7 +3243,7 @@ def admin_training_videos():
 @login_required
 @role_required('admin')
 def admin_gantt():
-    user_tasks = filter_tasks_for_user(SAMPLE_TASKS, g.current_user)
+    user_tasks = filter_tasks_for_user(get_all_tasks(), g.current_user)
     serialized_tasks = [serialize_gantt_task(task) for task in filter_tasks_by_params(user_tasks, {})]
     filters = collect_task_filters(user_tasks)
     return render_template(
