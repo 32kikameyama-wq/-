@@ -295,6 +295,8 @@
         if (refs.viewport) {
             refs.viewport.scrollLeft = 0;
         }
+
+        applyBarColors();
     }
 
     function convertToGanttItem(task) {
@@ -319,7 +321,9 @@
                 status: task.status,
                 assignee: task.assignee,
                 project: task.project_name,
-                priority: task.priority
+                company: task.company_name,
+                priority: task.priority,
+                color: task.color
             }
         };
     }
@@ -329,9 +333,12 @@
         const status = baseTask.status || '-';
         const assignee = baseTask.assignee || '未割当';
         const project = baseTask.project_name || '-';
+        const company = baseTask.company_name || '-';
+        const colorSwatch = baseTask.color ? `<span class="tooltip-color" style="background:${baseTask.color};"></span>` : '';
         return `
             <div class="gantt-tooltip">
                 <h3>${task.name}</h3>
+                <p><strong>会社:</strong> ${company} ${colorSwatch}</p>
                 <p><strong>案件:</strong> ${project}</p>
                 <p><strong>担当:</strong> ${assignee}</p>
                 <p><strong>期間:</strong> ${task.start} 〜 ${task.end}</p>
@@ -446,6 +453,7 @@
             .finally(() => {
                 refs.container?.classList.remove('loading');
                 refs.viewport?.classList.remove('is-loading');
+                applyBarColors();
             });
     }
 
@@ -792,6 +800,20 @@
         const month = String(d.getMonth() + 1).padStart(2, '0');
         const day = String(d.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
+    }
+
+    function applyBarColors() {
+        if (!state.gantt || !state.gantt.tasks) return;
+        state.gantt.tasks.forEach(taskObj => {
+            const rawTask = taskObj.task || taskObj._task || {};
+            const data = rawTask.data || {};
+            const color = rawTask.color || data.color;
+            if (color && taskObj.$bar) {
+                taskObj.$bar.setAttribute('fill', color);
+                taskObj.$bar.setAttribute('stroke', color);
+                taskObj.$bar.setAttribute('opacity', 0.95);
+            }
+        });
     }
 })();
 

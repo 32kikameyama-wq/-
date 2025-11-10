@@ -3568,6 +3568,14 @@ section h3 {
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-wrap: nowrap;
+}
+
+.gantt-filters .date-range-inputs input[type="date"] {
+    flex: 0 0 140px;
+    width: 140px;
+    min-width: 130px;
+    padding-right: 6px;
 }
 
 .date-range-separator {
@@ -3996,6 +4004,16 @@ section h3 {
 .gantt-tooltip p {
     margin: 2px 0;
     font-size: 0.85em;
+}
+
+.gantt-tooltip .tooltip-color {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-left: 6px;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    vertical-align: middle;
 }
 
 .gantt-container .bar.status-未着手 {
