@@ -3692,12 +3692,18 @@ section h3 {
     overflow: hidden;
     background: #fff;
     box-shadow: 0 4px 14px rgba(13, 40, 70, 0.08);
+    width: max-content;
 }
 
 .summary-header {
     background: linear-gradient(180deg, rgba(226, 236, 255, 0.9), rgba(214, 229, 255, 0.9));
     font-weight: 600;
     color: #1c2f4a;
+}
+
+.summary-quarter-row {
+    margin-bottom: 12px;
+    background: rgba(233, 241, 255, 0.7);
 }
 
 .summary-cell {
@@ -3717,6 +3723,21 @@ section h3 {
 
 .summary-row .summary-cell {
     border-bottom: none;
+}
+
+.summary-cell--quarter-label {
+    justify-content: center;
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #1f3654;
+}
+
+.summary-cell--quarter {
+    justify-content: center;
+    font-size: 0.8em;
+    letter-spacing: 0.03em;
+    color: #334155;
+    background: rgba(224, 234, 255, 0.6);
 }
 
 .summary-cell--head {
@@ -3778,6 +3799,9 @@ section h3 {
 .summary-phases li {
     font-size: 0.85em;
     color: #2a3b55;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .phase-badge {
@@ -3791,9 +3815,23 @@ section h3 {
     margin-left: 6px;
 }
 
+.phase-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 54px;
+    font-size: 0.72em;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: rgba(99, 102, 241, 0.12);
+    color: #3730a3;
+    border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
 .summary-timeline {
     flex-direction: column;
     width: 100%;
+    padding: 8px 0;
 }
 
 .timeline-grid {
@@ -3805,10 +3843,12 @@ section h3 {
     background: rgba(244, 248, 255, 0.6);
     border-radius: 10px;
     overflow: hidden;
+    gap: 0;
 }
 
 .timeline-cell {
     border-right: 1px dashed rgba(166, 186, 217, 0.8);
+    border-bottom: 1px dashed rgba(215, 225, 244, 0.7);
     background: rgba(255, 255, 255, 0.45);
 }
 
@@ -3825,6 +3865,12 @@ section h3 {
     box-shadow: 0 4px 10px rgba(17, 40, 72, 0.18);
     opacity: 0.9;
     grid-row: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 0.72em;
+    font-weight: 600;
 }
 
 .summary-bar.manual {
@@ -3833,6 +3879,10 @@ section h3 {
 
 .summary-bar.auto {
     background: rgba(67, 132, 242, 0.95);
+}
+
+.summary-bar .bar-status {
+    padding: 0 8px;
 }
 
 .summary-grid.summary-row + .summary-grid.summary-row {

@@ -21,6 +21,17 @@
         isSaving: false
     };
 
+    const STATUS_COLOR_MAP = {
+        '計画中': '#60a5fa',
+        '進行中': '#34d399',
+        'レビュー中': '#facc15',
+        '保留': '#f87171',
+        '未着手': '#94a3b8',
+        '完了': '#c084fc',
+        '納品待ち': '#f97316',
+        '完了済': '#0ea5e9'
+    };
+
     const FIELD_LABELS = {
         title: 'タスク名',
         type: '種別',
@@ -830,6 +841,7 @@
         }
 
         const months = buildSummaryMonths(projects);
+        const quarters = buildQuarterSpans(months);
         const header = `
             <div class="summary-grid summary-header" style="grid-template-columns: 220px 200px repeat(${months.length}, 1fr);">
                 <div class="summary-cell summary-cell--head">案件 / 会社</div>
@@ -837,8 +849,14 @@
                 ${months.map(m => `<div class="summary-cell summary-cell--month">${m.label}</div>`).join('')}
             </div>
         `;
+        const quarterRow = `
+            <div class="summary-grid summary-quarter-row" style="grid-template-columns: 420px repeat(${months.length}, 1fr);">
+                <div class="summary-cell summary-cell--quarter-label">四半期</div>
+                ${quarters.map(q => `<div class="summary-cell summary-cell--quarter" style="grid-column: span ${q.span};">${q.label}</div>`).join('')}
+            </div>
+        `;
         const rows = projects.map((project, index) => createSummaryRow(project, index + 1, months)).join('');
-        refs.summaryContainer.innerHTML = header + rows;
+        refs.summaryContainer.innerHTML = quarterRow + header + rows;
     }
 
     function buildSummaryMonths(projects) {
@@ -876,6 +894,24 @@
         return months;
     }
 
+    function buildQuarterSpans(months) {
+        const quarters = [];
+        let current = null;
+
+        months.forEach(m => {
+            const quarterNumber = Math.floor(m.month / 3) + 1;
+            const label = `${m.year}年度 第${quarterNumber}四半期`;
+            if (!current || current.label !== label) {
+                if (current) quarters.push(current);
+                current = { label, span: 1 };
+            } else {
+                current.span += 1;
+            }
+        });
+        if (current) quarters.push(current);
+        return quarters;
+    }
+
     function createSummaryRow(project, displayIndex, months) {
         const color = project.color || '#3b82f6';
         const phases = project.phases || [];
@@ -889,19 +925,27 @@
             return target + 1;
         };
 
-        const bars = phases.map(phase => {
+        const bars = phases.map((phase, idx) => {
             const startIndex = monthLookup(phase.plan_start) ?? monthLookup(phase.actual_start);
             const endIndex = monthLookup(phase.plan_end) ?? monthLookup(phase.actual_end) ?? startIndex;
             if (!startIndex || !endIndex) return '';
             const spanEnd = endIndex + 1;
             const originClass = phase.origin === 'manual' ? 'manual' : 'auto';
-            return `<div class="summary-bar ${originClass}" style="grid-column: ${startIndex} / ${spanEnd}; background:${color};"></div>`;
+            const statusColor = STATUS_COLOR_MAP[phase.status] || color;
+            const row = idx + 1;
+            const label = phase.status ? `<span class="bar-status">${phase.status}</span>` : '';
+            return `<div class="summary-bar ${originClass}" style="grid-column: ${startIndex} / ${spanEnd}; grid-row: ${row}; background:${statusColor};">
+                        ${label}
+                    </div>`;
         }).join('');
 
         const phaseList = phases.map(phase => {
             const originBadge = phase.origin === 'manual' ? '<span class="phase-badge">手動</span>' : '';
-            return `<li>${phase.title} ${originBadge}</li>`;
+            const statusBadge = phase.status ? `<span class="phase-status">${phase.status}</span>` : '';
+            return `<li>${phase.title} ${statusBadge} ${originBadge}</li>`;
         }).join('');
+
+        const templateRows = phases.length ? `repeat(${phases.length}, 1fr)` : 'repeat(1, 1fr)';
 
         return `
             <div class="summary-grid summary-row" style="grid-template-columns: 220px 200px repeat(${months.length}, 1fr);">
@@ -916,7 +960,7 @@
                     <ul>${phaseList}</ul>
                 </div>
                 <div class="summary-cell summary-timeline">
-                    <div class="timeline-grid" style="grid-template-columns: repeat(${months.length}, 1fr);">
+                    <div class="timeline-grid" style="grid-template-columns: repeat(${months.length}, 1fr); grid-template-rows: ${templateRows};">
                         ${months.map(() => '<div class="timeline-cell"></div>').join('')}
                         ${bars}
                     </div>
