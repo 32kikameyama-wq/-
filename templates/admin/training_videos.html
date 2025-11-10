@@ -75,7 +75,12 @@
 
     <section class="training-videos-list">
         {% for video in videos %}
-        <article class="training-card" data-video-id="{{ video.id }}">
+        <article class="training-card"
+                 data-video-id="{{ video.id }}"
+                 data-video-title="{{ video.title|replace('\n', '&#10;')|e }}"
+                 data-video-description="{{ (video.description or '')|replace('\n', '&#10;')|e }}"
+                 data-video-url="{{ video.url|e }}"
+                 data-video-duration="{{ video.duration_minutes or '' }}">
             <header class="training-card-header">
                 <div>
                     <h3>{{ video.title }}</h3>
@@ -84,6 +89,10 @@
                 <div class="training-meta">
                     <span class="training-duration">{{ video.duration_minutes or '---' }}分</span>
                     <a href="{{ video.url }}" target="_blank" rel="noopener" class="btn btn-secondary">動画を開く</a>
+                    <div class="training-actions">
+                        <button type="button" class="btn btn-outline btn-sm btn-edit-training" data-action="edit">編集</button>
+                        <button type="button" class="btn btn-danger btn-sm btn-delete-training" data-action="delete">削除</button>
+                    </div>
                 </div>
             </header>
 
@@ -136,5 +145,48 @@
 
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/admin_training_videos.js') }}" defer></script>
+
+<div id="trainingEditModal" class="gantt-modal training-modal" aria-hidden="true" role="dialog" aria-labelledby="training-edit-title">
+    <div class="modal-overlay" data-close-target="trainingEditModal"></div>
+    <div class="gantt-modal-content">
+        <header class="gantt-modal-header">
+            <h3 id="training-edit-title">動画情報を編集</h3>
+            <button type="button" class="gantt-modal-close" data-close-target="trainingEditModal" aria-label="閉じる">×</button>
+        </header>
+        <div class="gantt-modal-body">
+            <form id="adminTrainingEditForm" class="training-form" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="edit_training_title">タイトル *</label>
+                    <input type="text" id="edit_training_title" name="title" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit_training_file">動画ファイルの差し替え</label>
+                    <input type="file" id="edit_training_file" name="video_file" accept=".mp4,.mov,.avi,.mkv,.wmv,.m4v">
+                    <small class="form-text">指定すると既存のURLの代わりに新しいファイルを保存します。</small>
+                </div>
+                <div class="form-group">
+                    <label for="edit_training_url">動画URL</label>
+                    <input type="url" id="edit_training_url" name="url" placeholder="https://...">
+                    <small class="form-text">ファイルを差し替える場合は不要です。</small>
+                </div>
+                <div class="form-group">
+                    <label for="edit_training_duration">想定視聴時間（分）</label>
+                    <input type="number" id="edit_training_duration" name="duration_minutes" min="0" placeholder="20">
+                </div>
+                <div class="form-group">
+                    <label for="edit_training_description">概要</label>
+                    <textarea id="edit_training_description" name="description" rows="3"></textarea>
+                </div>
+                <div class="form-actions">
+                    <span id="adminTrainingEditMessage" class="form-message"></span>
+                    <div class="modal-buttons">
+                        <button type="button" class="btn btn-outline" data-close-target="trainingEditModal">キャンセル</button>
+                        <button type="submit" class="btn btn-primary">更新する</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 

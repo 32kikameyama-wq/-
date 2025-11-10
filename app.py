@@ -3391,6 +3391,163 @@ def api_admin_create_training_video():
         'data': video_context
     })
 
+
+def get_training_video_file_path(video_url: str) -> str | None:
+    """保存済み動画URLからローカルファイルパスを取得"""
+    if not video_url:
+        return None
+    try:
+        base_prefix = url_for('serve_training_video', filename='')
+    except RuntimeError:
+        base_prefix = '/uploads/training_videos/'
+    if not video_url.startswith(base_prefix):
+        return None
+    filename = video_url[len(base_prefix):].lstrip('/')
+    if not filename:
+        return None
+    return os.path.join(TRAINING_VIDEO_UPLOAD_FOLDER, filename)
+
+
+def remove_training_video_file(video_url: str):
+    """ローカルに保存している動画ファイルを削除"""
+    file_path = get_training_video_file_path(video_url)
+    if file_path and os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except OSError:
+            app.logger.warning("Failed to remove training video file: %s", file_path)
+
+
+def save_training_video_upload(uploaded_file):
+    """アップロードされた動画ファイルを保存しURLを返す"""
+    if not uploaded_file or not uploaded_file.filename:
+        return None, '動画ファイルが選択されていません'
+
+    filename = uploaded_file.filename
+    if not allowed_training_video_filename(filename):
+        return None, '対応していない動画形式です (mp4, mov, avi, mkv, wmv, m4v)'
+
+    extension = filename.rsplit('.', 1)[1].lower()
+    unique_name = f"{uuid4().hex}.{extension}"
+    safe_name = secure_filename(unique_name)
+    save_path = os.path.join(TRAINING_VIDEO_UPLOAD_FOLDER, safe_name)
+    uploaded_file.save(save_path)
+    return url_for('serve_training_video', filename=safe_name), None
+
+
+@app.route('/api/admin/training-videos/<int:video_id>', methods=['PUT'])
+@login_required
+@role_required('admin')
+def api_admin_update_training_video(video_id):
+    """管理者: 編集インプット動画の更新"""
+    existing = fetch_one(
+        "select id, title, description, url, duration_minutes from app.training_videos where id = :video_id",
+        video_id=video_id
+    )
+    if not existing:
+        return jsonify({'status': 'error', 'message': '動画が見つかりません'}), 404
+
+    form = request.form
+    files = request.files
+
+    title = (form.get('title') or '').strip()
+    description = (form.get('description') or '').strip()
+    url_value = (form.get('url') or '').strip()
+    duration_value = form.get('duration_minutes', form.get('duration'))
+    uploaded_file = files.get('video_file') if files else None
+
+    errors = []
+    if not title:
+        errors.append('タイトルは必須です')
+
+    video_url = existing['url']
+    old_url_to_remove = None
+
+    if uploaded_file and uploaded_file.filename:
+        saved_url, upload_error = save_training_video_upload(uploaded_file)
+        if upload_error:
+            errors.append(upload_error)
+        else:
+            if video_url != saved_url and get_training_video_file_path(video_url):
+                old_url_to_remove = video_url
+            video_url = saved_url
+    elif url_value:
+        if url_value != video_url and get_training_video_file_path(video_url):
+            old_url_to_remove = video_url
+        video_url = url_value
+
+    duration_minutes = existing.get('duration_minutes')
+    if duration_value not in (None, ''):
+        try:
+            duration_minutes = int(duration_value)
+            if duration_minutes < 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            errors.append('想定視聴時間は0以上の数値で入力してください')
+
+    if not video_url:
+        errors.append('動画URLまたは動画ファイルのいずれかを指定してください')
+
+    if errors:
+        return jsonify({'status': 'error', 'message': ' / '.join(errors)}), 400
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                update app.training_videos
+                set title = :title,
+                    description = :description,
+                    url = :url,
+                    duration_minutes = :duration_minutes
+                where id = :video_id
+                """
+            ),
+            {
+                'video_id': video_id,
+                'title': title,
+                'description': description,
+                'url': video_url,
+                'duration_minutes': duration_minutes
+            }
+        )
+
+    if old_url_to_remove:
+        remove_training_video_file(old_url_to_remove)
+
+    video_context = get_training_video_context(video_id, g.current_user, include_watchers=True)
+    return jsonify({
+        'status': 'success',
+        'message': '動画を更新しました',
+        'data': video_context
+    })
+
+
+@app.route('/api/admin/training-videos/<int:video_id>', methods=['DELETE'])
+@login_required
+@role_required('admin')
+def api_admin_delete_training_video(video_id):
+    """管理者: 編集インプット動画の削除"""
+    existing = fetch_one(
+        "select id, url from app.training_videos where id = :video_id",
+        video_id=video_id
+    )
+    if not existing:
+        return jsonify({'status': 'error', 'message': '動画が見つかりません'}), 404
+
+    with engine.begin() as conn:
+        conn.execute(
+            text("delete from app.training_videos where id = :video_id"),
+            {'video_id': video_id}
+        )
+
+    remove_training_video_file(existing['url'])
+
+    return jsonify({
+        'status': 'success',
+        'message': '動画を削除しました'
+    })
+
 @app.route('/admin/training-videos')
 @login_required
 @role_required('admin')

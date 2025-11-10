@@ -3297,6 +3297,13 @@ section h3 {
     align-items: flex-end;
 }
 
+.training-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
 .training-duration {
     display: inline-block;
     padding: 4px 10px;
@@ -3445,6 +3452,38 @@ section h3 {
     border-radius: 8px;
     color: #666;
     background: #fff;
+}
+
+.btn-outline {
+    background: #fff;
+    border: 1px solid #000;
+    color: #1f3a5f;
+    transition: background 0.2s ease;
+}
+
+.btn-outline:hover {
+    background: #d9ecff;
+}
+
+.btn-danger {
+    background: #e03131;
+    border: 1px solid #000;
+    color: #fff;
+}
+
+.btn-danger:hover {
+    background: #c92a2a;
+}
+
+.btn-sm {
+    padding: 5px 12px;
+    font-size: 0.85em;
+    line-height: 1.2;
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 12px;
 }
 
 .training-modal {
