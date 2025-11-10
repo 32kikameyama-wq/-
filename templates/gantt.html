@@ -1,0 +1,308 @@
+{% extends base_template|default('layout.html') %}
+
+{% block title %}ガントチャート | {{ super() }}{% endblock %}
+
+{% block extra_scripts %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.css">
+<script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+<script>
+    window.GANTT_INITIAL_DATA = {{ initial_tasks|tojson }};
+    window.GANTT_FILTER_OPTIONS = {{ filter_options|tojson }};
+    window.GANTT_DEPENDENCY_TYPES = {{ dependency_types|tojson }};
+    window.GANTT_CURRENT_VIEW = {{ current_view|tojson }};
+    window.GANTT_USER_ROLE = {{ current_user.role|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/gantt_view.js') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+<div class="page-header gantt-page-header">
+    <div class="header-top">
+        <div>
+            <h1>ガントチャート</h1>
+            <p class="page-subtitle">案件・タスクの計画と進捗を時間軸で可視化します</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-primary" id="gantt-add-task-btn">
+                <span>＋ タスクを追加</span>
+            </button>
+            <button class="btn btn-secondary" id="gantt-refresh-btn">
+                更新
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="gantt-filters">
+    <div class="filter-row">
+        <div class="filter-group">
+            <label for="gantt-filter-project">案件</label>
+            <select id="gantt-filter-project" class="filter-control">
+                <option value="">すべて</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="gantt-filter-assignee">担当者</label>
+            <select id="gantt-filter-assignee" class="filter-control">
+                <option value="">すべて</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="gantt-filter-status">ステータス</label>
+            <select id="gantt-filter-status" class="filter-control">
+                <option value="">すべて</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="gantt-filter-keyword">キーワード</label>
+            <input type="text" id="gantt-filter-keyword" class="filter-control" placeholder="案件名 / タスク名 / メモ">
+        </div>
+        <div class="filter-group date-range">
+            <label>期間</label>
+            <div class="date-range-inputs">
+                <input type="date" id="gantt-filter-start" class="filter-control">
+                <span class="date-range-separator">〜</span>
+                <input type="date" id="gantt-filter-end" class="filter-control">
+            </div>
+        </div>
+        <div class="filter-group">
+            <label>ビュー</label>
+            <div class="view-toggle" role="group" aria-label="Plan/Actual Toggle">
+                <button class="view-toggle-btn active" data-view="plan">計画</button>
+                <button class="view-toggle-btn" data-view="actual">実績</button>
+            </div>
+        </div>
+        <div class="filter-group">
+            <button class="btn btn-outline" id="gantt-filter-apply">絞り込む</button>
+            <button class="btn btn-link" id="gantt-filter-reset">リセット</button>
+        </div>
+    </div>
+</div>
+
+<div class="gantt-layout">
+    <div class="gantt-main">
+        <div id="gantt-container" class="gantt-container" aria-label="Gantt chart timeline"></div>
+        <div id="gantt-empty-state" class="gantt-empty-state" hidden>
+            <p>条件に一致するタスクがありません。</p>
+            <button class="btn btn-primary" id="gantt-empty-add-btn">タスクを追加する</button>
+        </div>
+    </div>
+    <aside class="gantt-side-panel" id="gantt-side-panel" aria-label="Task detail panel">
+        <div class="side-panel-header">
+            <div>
+                <h2 id="gantt-task-title">タスク詳細</h2>
+                <p id="gantt-task-project" class="task-project">案件: -</p>
+            </div>
+            <button class="side-panel-close" id="gantt-panel-close" aria-label="閉じる">×</button>
+        </div>
+        <div class="side-panel-content">
+            <div class="side-panel-section">
+                <h3>基本情報</h3>
+                <div class="form-row">
+                    <label for="gantt-detail-status">ステータス</label>
+                    <select id="gantt-detail-status">
+                        <option value="未着手">未着手</option>
+                        <option value="進行中">進行中</option>
+                        <option value="保留">保留</option>
+                        <option value="レビュー中">レビュー中</option>
+                        <option value="完了">完了</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label for="gantt-detail-progress">進捗（％）</label>
+                    <input type="number" id="gantt-detail-progress" min="0" max="100" step="5">
+                </div>
+                <div class="form-row">
+                    <label for="gantt-detail-assignee">担当者</label>
+                    <input type="text" id="gantt-detail-assignee">
+                </div>
+                <div class="form-row">
+                    <label for="gantt-detail-priority">優先度</label>
+                    <select id="gantt-detail-priority">
+                        <option value="高">高</option>
+                        <option value="中">中</option>
+                        <option value="低">低</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="side-panel-section">
+                <h3>期間</h3>
+                <div class="form-row">
+                    <label for="gantt-plan-start">計画開始日</label>
+                    <input type="date" id="gantt-plan-start">
+                </div>
+                <div class="form-row">
+                    <label for="gantt-plan-end">計画終了日</label>
+                    <input type="date" id="gantt-plan-end">
+                </div>
+                <div class="form-row">
+                    <label for="gantt-actual-start">実績開始日</label>
+                    <input type="date" id="gantt-actual-start">
+                </div>
+                <div class="form-row">
+                    <label for="gantt-actual-end">実績終了日</label>
+                    <input type="date" id="gantt-actual-end">
+                </div>
+            </div>
+
+            <div class="side-panel-section">
+                <h3>依存関係</h3>
+                <div class="form-row">
+                    <label for="gantt-dependencies">先行タスク</label>
+                    <select id="gantt-dependencies" multiple size="5"></select>
+                    <span class="form-text">※ Ctrl/⌘キーで複数選択</span>
+                </div>
+                <div class="form-row">
+                    <label for="gantt-dependency-type">依存タイプ</label>
+                    <select id="gantt-dependency-type">
+                        {% for dep_type in dependency_types %}
+                        <option value="{{ dep_type }}">{{ dep_type }}</option>
+                        {% endfor %}
+                    </select>
+                    <span class="form-text">選択した先行タスクに適用します</span>
+                </div>
+                <div class="dependency-actions">
+                    <button class="btn btn-outline" id="gantt-apply-dependency">追加/更新</button>
+                    <button class="btn btn-link" id="gantt-clear-dependency">解除</button>
+                </div>
+                <ul class="dependency-list" id="gantt-dependency-list"></ul>
+            </div>
+
+            <div class="side-panel-section">
+                <h3>並び順</h3>
+                <div class="reorder-actions">
+                    <button class="btn btn-outline" id="gantt-move-up">▲ 上へ</button>
+                    <button class="btn btn-outline" id="gantt-move-down">▼ 下へ</button>
+                </div>
+            </div>
+
+            <div class="side-panel-section">
+                <h3>メモ</h3>
+                <textarea id="gantt-detail-notes" rows="4" placeholder="メモ・課題・決定事項を記録"></textarea>
+            </div>
+
+            <div class="side-panel-section meta">
+                <h3>メタ情報</h3>
+                <p><span class="meta-label">作成者:</span> <span id="gantt-meta-created-by">-</span></p>
+                <p><span class="meta-label">最終更新:</span> <span id="gantt-meta-updated">-</span></p>
+            </div>
+        </div>
+        <div class="side-panel-footer">
+            <button class="btn btn-outline" id="gantt-history-btn">履歴</button>
+            <div class="side-panel-actions">
+                <button class="btn btn-secondary" id="gantt-panel-cancel">キャンセル</button>
+                <button class="btn btn-primary" id="gantt-panel-save">保存</button>
+            </div>
+        </div>
+    </aside>
+</div>
+
+<div class="gantt-modal" id="gantt-history-modal" aria-hidden="true">
+    <div class="modal-overlay" data-close-target="gantt-history-modal"></div>
+    <div class="gantt-modal-content" role="dialog" aria-modal="true" aria-labelledby="gantt-history-title">
+        <header class="gantt-modal-header">
+            <h2 id="gantt-history-title">変更履歴</h2>
+            <button class="gantt-modal-close" data-close-target="gantt-history-modal" aria-label="閉じる">×</button>
+        </header>
+        <div class="gantt-modal-body">
+            <ul id="gantt-history-list" class="history-list"></ul>
+        </div>
+        <footer class="gantt-modal-footer">
+            <button class="btn btn-secondary" data-close-target="gantt-history-modal">閉じる</button>
+        </footer>
+    </div>
+</div>
+
+<div class="gantt-modal" id="gantt-task-modal" aria-hidden="true">
+    <div class="modal-overlay" data-close-target="gantt-task-modal"></div>
+    <div class="gantt-modal-content large" role="dialog" aria-modal="true" aria-labelledby="gantt-task-modal-title">
+        <header class="gantt-modal-header">
+            <h2 id="gantt-task-modal-title">タスクを追加</h2>
+            <button class="gantt-modal-close" data-close-target="gantt-task-modal" aria-label="閉じる">×</button>
+        </header>
+        <form id="gantt-task-form" class="gantt-task-form">
+            <div class="gantt-modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="modal-task-title">タスク名 *</label>
+                        <input type="text" id="modal-task-title" name="title" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-task-project">案件 *</label>
+                        <select id="modal-task-project" name="project_id" required></select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="modal-task-type">種別</label>
+                        <select id="modal-task-type" name="type">
+                            <option value="PLAN">PLAN</option>
+                            <option value="EDIT">EDIT</option>
+                            <option value="REVIEW">REVIEW</option>
+                            <option value="DELIVERY">DELIVERY</option>
+                            <option value="CAPTION">CAPTION</option>
+                            <option value="OTHER">OTHER</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-task-status">ステータス</label>
+                        <select id="modal-task-status" name="status">
+                            <option value="未着手">未着手</option>
+                            <option value="進行中">進行中</option>
+                            <option value="保留">保留</option>
+                            <option value="レビュー中">レビュー中</option>
+                            <option value="完了">完了</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-task-assignee">担当者</label>
+                        <input type="text" id="modal-task-assignee" name="assignee">
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-task-priority">優先度</label>
+                        <select id="modal-task-priority" name="priority">
+                            <option value="高">高</option>
+                            <option value="中" selected>中</option>
+                            <option value="低">低</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="modal-plan-start">計画開始</label>
+                        <input type="date" id="modal-plan-start" name="plan_start">
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-plan-end">計画終了</label>
+                        <input type="date" id="modal-plan-end" name="plan_end">
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-actual-start">実績開始</label>
+                        <input type="date" id="modal-actual-start" name="actual_start">
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-actual-end">実績終了</label>
+                        <input type="date" id="modal-actual-end" name="actual_end">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="modal-task-progress">進捗（％）</label>
+                        <input type="number" id="modal-task-progress" name="progress" min="0" max="100" step="5" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-task-notes">メモ</label>
+                        <textarea id="modal-task-notes" name="notes" rows="3"></textarea>
+                    </div>
+                </div>
+            </div>
+            <footer class="gantt-modal-footer">
+                <button type="button" class="btn btn-secondary" data-close-target="gantt-task-modal">キャンセル</button>
+                <button type="submit" class="btn btn-primary">保存</button>
+            </footer>
+        </form>
+    </div>
+</div>
+{% endblock %}
+

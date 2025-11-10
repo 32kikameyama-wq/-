@@ -67,7 +67,7 @@
                             <span class="nav-text">案件管理</span>
                             <span class="nav-toggle-icon">▼</span>
                         </div>
-                        <ul class="nav-submenu {% if request.endpoint in ['projects', 'project_detail', 'board', 'assets'] %}active{% endif %}" style="{% if request.endpoint in ['projects', 'project_detail', 'board', 'assets'] %}display: block;{% else %}display: none;{% endif %}">
+                        <ul class="nav-submenu {% if request.endpoint in ['projects', 'project_detail', 'board', 'assets', 'admin_gantt'] %}active{% endif %}" style="{% if request.endpoint in ['projects', 'project_detail', 'board', 'assets', 'admin_gantt'] %}display: block;{% else %}display: none;{% endif %}">
                             <li class="nav-subitem">
                                 <a href="/projects" class="nav-link {% if request.endpoint == 'projects' %}active{% endif %}">
                                     <span class="nav-text">案件一覧</span>
@@ -81,6 +81,11 @@
                             <li class="nav-subitem">
                                 <a href="/assets" class="nav-link {% if request.endpoint == 'assets' %}active{% endif %}">
                                     <span class="nav-text">素材管理</span>
+                                </a>
+                            </li>
+                            <li class="nav-subitem">
+                                <a href="{{ url_for('admin_gantt') }}" class="nav-link {% if request.endpoint == 'admin_gantt' %}active{% endif %}">
+                                    <span class="nav-text">ガントチャート</span>
                                 </a>
                             </li>
                         </ul>

@@ -720,8 +720,21 @@ SAMPLE_TASKS = [
         'type': 'EDIT',
         'status': '進行中',
         'assignee': 'テスト',
+        'priority': '高',
+        'progress': 60,
         'due_date': '2025-02-10',
-        'priority': '高'
+        'plan_start': '2025-01-29',
+        'plan_end': '2025-02-09',
+        'actual_start': '2025-02-01',
+        'actual_end': '',
+        'order_index': 1,
+        'project_id': None,
+        'dependencies': [],
+        'created_by': '管理者',
+        'updated_by': '管理者',
+        'updated_at': '2025-02-01 09:00',
+        'notes': '初稿編集作業',
+        'history': []
     },
     {
         'id': 2,
@@ -730,8 +743,21 @@ SAMPLE_TASKS = [
         'type': 'REVIEW',
         'status': '待機中',
         'assignee': 'テスト',
+        'priority': '中',
+        'progress': 10,
         'due_date': '2025-02-12',
-        'priority': '中'
+        'plan_start': '2025-02-08',
+        'plan_end': '2025-02-11',
+        'actual_start': '',
+        'actual_end': '',
+        'order_index': 2,
+        'project_id': None,
+        'dependencies': [{'task_id': 1, 'type': 'FS'}],
+        'created_by': '管理者',
+        'updated_by': '管理者',
+        'updated_at': '2025-02-03 10:00',
+        'notes': 'クライアントレビュー待ち',
+        'history': []
     },
     {
         'id': 3,
@@ -740,8 +766,21 @@ SAMPLE_TASKS = [
         'type': 'THUMB',
         'status': '完了',
         'assignee': 'テスト',
+        'priority': '低',
+        'progress': 100,
         'due_date': '2025-02-08',
-        'priority': '低'
+        'plan_start': '2025-01-25',
+        'plan_end': '2025-01-28',
+        'actual_start': '2025-01-25',
+        'actual_end': '2025-01-27',
+        'order_index': 3,
+        'project_id': None,
+        'dependencies': [],
+        'created_by': '編集者A',
+        'updated_by': '編集者A',
+        'updated_at': '2025-01-27 18:30',
+        'notes': '2案作成済み',
+        'history': []
     },
     {
         'id': 4,
@@ -750,8 +789,21 @@ SAMPLE_TASKS = [
         'type': 'CAPTION',
         'status': '完了',
         'assignee': 'テスト',
+        'priority': '中',
+        'progress': 100,
         'due_date': '2025-01-15',
-        'priority': '中'
+        'plan_start': '2025-01-10',
+        'plan_end': '2025-01-14',
+        'actual_start': '2025-01-11',
+        'actual_end': '2025-01-13',
+        'order_index': 4,
+        'project_id': None,
+        'dependencies': [],
+        'created_by': '編集者B',
+        'updated_by': '編集者B',
+        'updated_at': '2025-01-13 16:45',
+        'notes': '字幕フォーマット統一済み',
+        'history': []
     }
 ]
 
@@ -806,13 +858,44 @@ def create_task_entry(
     priority: str = '中',
     project=None,
     project_id: int = None,
-    progress: int = 0
+    progress: int = 0,
+    plan_start: str = '',
+    plan_end: str = '',
+    actual_start: str = '',
+    actual_end: str = '',
+    order_index: int = None,
+    dependencies=None,
+    created_by: str = None,
+    updated_by: str = None,
+    notes: str = ''
 ):
     project_name = ''
     if project:
         project_name = project.get('name', '')
         project_id = project.get('id')
     task_type = task_type.upper()
+    if order_index is None:
+        order_index = len(SAMPLE_TASKS) + 1
+    normalized_dependencies = []
+    if dependencies:
+        for dep in dependencies:
+            if isinstance(dep, dict):
+                task_id = dep.get('task_id')
+                dep_type = (dep.get('type') or 'FS').upper()
+            else:
+                task_id = dep
+                dep_type = 'FS'
+            if task_id:
+                normalized_dependencies.append({'task_id': int(task_id), 'type': dep_type})
+    now_str = datetime.now().strftime('%Y-%m-%d %H:%M')
+    if not plan_start and due_date:
+        try:
+            due_dt = datetime.strptime(due_date, '%Y-%m-%d')
+            plan_start = (due_dt - timedelta(days=3)).strftime('%Y-%m-%d')
+        except ValueError:
+            plan_start = ''
+    if not plan_end:
+        plan_end = due_date or plan_start
     return {
         'id': next_task_id(),
         'title': title,
@@ -823,7 +906,145 @@ def create_task_entry(
         'assignee': assignee,
         'due_date': due_date,
         'priority': priority,
-        'progress': progress
+        'progress': progress,
+        'plan_start': plan_start,
+        'plan_end': plan_end,
+        'actual_start': actual_start,
+        'actual_end': actual_end,
+        'order_index': order_index,
+        'dependencies': normalized_dependencies,
+        'created_by': created_by or (g.current_user['name'] if getattr(g, 'current_user', None) else 'システム'),
+        'updated_by': updated_by or (g.current_user['name'] if getattr(g, 'current_user', None) else 'システム'),
+        'updated_at': now_str,
+        'notes': notes,
+        'history': []
+    }
+
+
+TASK_DEPENDENCY_TYPES = {'FS', 'SS', 'FF', 'SF'}
+
+
+def find_task(task_id: int):
+    return next((t for t in SAMPLE_TASKS if t.get('id') == task_id), None)
+
+
+def record_task_history(task: dict, field: str, old_value, new_value, actor: str):
+    if old_value == new_value:
+        return
+    entry = {
+        'id': len(task.setdefault('history', [])) + 1,
+        'field': field,
+        'old': old_value,
+        'new': new_value,
+        'actor': actor,
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M')
+    }
+    task['history'].insert(0, entry)
+
+
+def update_task_metadata(task: dict, actor: str):
+    task['updated_by'] = actor
+    task['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M')
+
+
+def serialize_gantt_task(task: dict):
+    dependencies = task.get('dependencies', [])
+    dependencies_string = ",".join(str(dep.get('task_id')) for dep in dependencies if dep.get('task_id'))
+    return {
+        'id': task.get('id'),
+        'name': task.get('title'),
+        'title': task.get('title'),
+        'project_id': task.get('project_id'),
+        'project_name': task.get('project_name'),
+        'assignee': task.get('assignee'),
+        'status': task.get('status'),
+        'priority': task.get('priority'),
+        'type': task.get('type'),
+        'progress': int(task.get('progress', 0) or 0),
+        'plan_start': task.get('plan_start'),
+        'plan_end': task.get('plan_end'),
+        'actual_start': task.get('actual_start'),
+        'actual_end': task.get('actual_end'),
+        'due_date': task.get('due_date'),
+        'order_index': task.get('order_index'),
+        'dependencies': dependencies,
+        'dependencies_string': dependencies_string,
+        'notes': task.get('notes', ''),
+        'updated_at': task.get('updated_at'),
+        'updated_by': task.get('updated_by'),
+        'created_by': task.get('created_by'),
+        'history': task.get('history', [])[:10],  # 最新10件まで
+    }
+
+
+def filter_tasks_for_user(tasks: list, current_user: dict):
+    if not current_user:
+        return []
+    role = current_user.get('role')
+    if role == 'admin':
+        return tasks
+    if role == 'editor':
+        user_name = current_user.get('name')
+        return [task for task in tasks if task.get('assignee') == user_name]
+    # その他ロールは閲覧のみ想定
+    return tasks
+
+
+def filter_tasks_by_params(tasks: list, params: dict):
+    filtered = tasks
+    project_id = params.get('project_id')
+    if project_id:
+        filtered = [task for task in filtered if str(task.get('project_id')) == str(project_id)]
+
+    assignee = params.get('assignee')
+    if assignee:
+        filtered = [task for task in filtered if task.get('assignee') == assignee]
+
+    status = params.get('status')
+    if status:
+        filtered = [task for task in filtered if task.get('status') == status]
+
+    keyword = params.get('keyword')
+    if keyword:
+        keyword_lower = keyword.lower()
+        filtered = [
+            task for task in filtered
+            if keyword_lower in (task.get('title') or '').lower()
+            or keyword_lower in (task.get('notes') or '').lower()
+            or keyword_lower in (task.get('project_name') or '').lower()
+        ]
+
+    start_date = params.get('start_date')
+    end_date = params.get('end_date')
+    if start_date:
+        filtered = [
+            task for task in filtered
+            if (task.get('plan_end') and task['plan_end'] >= start_date) or not task.get('plan_end')
+        ]
+    if end_date:
+        filtered = [
+            task for task in filtered
+            if (task.get('plan_start') and task['plan_start'] <= end_date) or not task.get('plan_start')
+        ]
+
+    return sorted(filtered, key=lambda t: (t.get('order_index') or 9999, t.get('id')))
+
+
+def collect_task_filters(tasks: list):
+    assignees = sorted({task.get('assignee') for task in tasks if task.get('assignee')})
+    statuses = sorted({task.get('status') for task in tasks if task.get('status')})
+    projects = sorted(
+        {
+            (task.get('project_id'), task.get('project_name'))
+            for task in tasks
+            if task.get('project_id') and task.get('project_name')
+        },
+        key=lambda item: item[1]
+    )
+    return {
+        'assignees': assignees,
+        'statuses': statuses,
+        'projects': [{'id': pid, 'name': pname} for pid, pname in projects]
     }
 
 
@@ -845,6 +1066,18 @@ PROJECT_NAME_TO_ID = {project['name']: project['id'] for project in SAMPLE_PROJE
 for task in SAMPLE_TASKS:
     if not task.get('project_id'):
         task['project_id'] = PROJECT_NAME_TO_ID.get(task.get('project_name'))
+    task.setdefault('progress', 0)
+    task.setdefault('plan_start', '')
+    task.setdefault('plan_end', task.get('due_date', ''))
+    task.setdefault('actual_start', '')
+    task.setdefault('actual_end', '')
+    task.setdefault('order_index', SAMPLE_TASKS.index(task) + 1)
+    task.setdefault('dependencies', [])
+    task.setdefault('notes', '')
+    task.setdefault('history', [])
+    task.setdefault('created_by', '管理者')
+    task.setdefault('updated_by', '管理者')
+    task.setdefault('updated_at', datetime.now().strftime('%Y-%m-%d %H:%M'))
 
 for asset in SAMPLE_ASSETS:
     if not asset.get('project_id'):
@@ -1437,7 +1670,13 @@ def api_add_project_task(project_id):
         priority=data.get('priority', '中'),
         project=project,
         project_id=project_id,
-        progress=int(data.get('progress', 0) or 0)
+        progress=int(data.get('progress', 0) or 0),
+        plan_start=data.get('plan_start', ''),
+        plan_end=data.get('plan_end', ''),
+        actual_start=data.get('actual_start', ''),
+        actual_end=data.get('actual_end', ''),
+        dependencies=data.get('dependencies'),
+        notes=data.get('notes', '')
     )
     SAMPLE_TASKS.append(task)
 
@@ -1618,25 +1857,160 @@ def api_task_detail(task_id):
         'data': task
     })
 
+
+@app.route('/api/gantt/tasks')
+@login_required
+def api_gantt_tasks():
+    current_user = g.current_user
+    user_tasks = filter_tasks_for_user(SAMPLE_TASKS, current_user)
+
+    params = {
+        'project_id': request.args.get('project_id'),
+        'assignee': request.args.get('assignee'),
+        'status': request.args.get('status'),
+        'keyword': request.args.get('keyword'),
+        'start_date': request.args.get('start_date'),
+        'end_date': request.args.get('end_date'),
+    }
+
+    filtered_tasks = filter_tasks_by_params(user_tasks, params)
+    include_history = request.args.get('include_history') == '1'
+
+    def serialize(task):
+        payload = serialize_gantt_task(task)
+        if not include_history:
+            payload.pop('history', None)
+        return payload
+
+    filters = collect_task_filters(user_tasks)
+
+    all_tasks_payload = [serialize_gantt_task(task) for task in user_tasks]
+    if not include_history:
+        for entry in all_tasks_payload:
+            entry.pop('history', None)
+
+    return jsonify({
+        'status': 'success',
+        'data': [serialize(task) for task in filtered_tasks],
+        'meta': {
+            'filters': filters,
+            'view': request.args.get('view', 'plan'),
+            'total': len(filtered_tasks),
+            'all_tasks': all_tasks_payload
+        }
+    })
+
+
+@app.route('/api/gantt/tasks/<int:task_id>/history')
+@login_required
+def api_gantt_task_history(task_id):
+    task = find_task(task_id)
+    if not task:
+        return jsonify({'status': 'error', 'message': 'タスクが見つかりません'}), 404
+    return jsonify({
+        'status': 'success',
+        'data': task.get('history', [])
+    })
+
+
+@app.route('/api/gantt/tasks/reorder', methods=['POST'])
+@login_required
+@role_required('admin', 'editor')
+def api_gantt_reorder():
+    data = request.get_json() or {}
+    order = data.get('order', [])
+    if not isinstance(order, list):
+        return jsonify({'status': 'error', 'message': 'orderはリスト形式で指定してください'}), 400
+
+    actor = g.current_user['name'] if g.current_user else 'システム'
+    updated = []
+    for index, task_id in enumerate(order, start=1):
+        task = find_task(task_id)
+        if not task:
+            continue
+        record_task_history(task, 'order_index', task.get('order_index'), index, actor)
+        task['order_index'] = index
+        update_task_metadata(task, actor)
+        updated.append(task_id)
+
+    return jsonify({
+        'status': 'success',
+        'message': '表示順を更新しました',
+        'data': {'updated_ids': updated}
+    })
+
 @app.route('/api/tasks/<int:task_id>', methods=['PUT'])
+@login_required
+@role_required('admin', 'editor')
 def api_update_task(task_id):
     """タスク更新API"""
-    data = request.get_json()
-    task = next((t for t in SAMPLE_TASKS if t['id'] == task_id), None)
+    data = request.get_json() or {}
+    task = find_task(task_id)
     
     if not task:
         return jsonify({'status': 'error', 'message': 'タスクが見つかりません'}), 404
     
-    # タスクを更新
-    task['title'] = data.get('title', task['title'])
-    task['project_name'] = data.get('project_name', task.get('project_name'))
-    task['type'] = data.get('type', task.get('type'))
-    task['status'] = data.get('status', task.get('status', '待機中'))
-    task['assignee'] = data.get('assignee', task.get('assignee'))
-    task['due_date'] = data.get('due_date', task.get('due_date'))
-    task['priority'] = data.get('priority', task.get('priority', '中'))
-    if 'progress' in data:
-        task['progress'] = data['progress']
+    actor = g.current_user['name'] if g.current_user else 'システム'
+
+    updatable_fields = [
+        'title', 'type', 'status', 'assignee', 'due_date', 'priority',
+        'progress', 'plan_start', 'plan_end', 'actual_start', 'actual_end',
+        'order_index', 'notes'
+    ]
+
+    for field in updatable_fields:
+        if field in data:
+            value = data[field]
+            if field == 'progress' and value is not None:
+                try:
+                    value = int(value)
+                except (TypeError, ValueError):
+                    value = task.get(field, 0)
+            if field == 'order_index' and value is not None:
+                try:
+                    value = int(value)
+                except (TypeError, ValueError):
+                    value = task.get(field)
+            record_task_history(task, field, task.get(field), value, actor)
+            task[field] = value
+
+    if 'project_id' in data or 'project_name' in data:
+        new_project_id = data.get('project_id', task.get('project_id'))
+        new_project_name = data.get('project_name')
+        project = None
+        if new_project_id:
+            project, company = find_project_by_id(int(new_project_id))
+            if not project:
+                return jsonify({'status': 'error', 'message': '対象の案件が見つかりません'}), 404
+            new_project_name = project.get('name')
+        elif new_project_name:
+            new_project_id = PROJECT_NAME_TO_ID.get(new_project_name)
+            if new_project_id:
+                project, _ = find_project_by_id(new_project_id)
+        record_task_history(task, 'project_id', task.get('project_id'), new_project_id, actor)
+        record_task_history(task, 'project_name', task.get('project_name'), new_project_name, actor)
+        task['project_id'] = new_project_id
+        task['project_name'] = new_project_name
+
+    if 'dependencies' in data:
+        deps_payload = data['dependencies'] or []
+        normalized = []
+        for dep in deps_payload:
+            if isinstance(dep, dict):
+                dep_id = dep.get('task_id')
+                dep_type = (dep.get('type') or 'FS').upper()
+            else:
+                dep_id = dep
+                dep_type = 'FS'
+            if not dep_id or dep_id == task_id:
+                continue
+            if dep_type not in TASK_DEPENDENCY_TYPES:
+                dep_type = 'FS'
+            normalized.append({'task_id': int(dep_id), 'type': dep_type})
+        record_task_history(task, 'dependencies', task.get('dependencies', []), normalized, actor)
+        task['dependencies'] = normalized
+
+    update_task_metadata(task, actor)
     
     return jsonify({
         'status': 'success',
@@ -1645,6 +2019,8 @@ def api_update_task(task_id):
     })
 
 @app.route('/api/tasks', methods=['POST'])
+@login_required
+@role_required('admin', 'editor')
 def api_create_task():
     """タスク作成API"""
     data = request.get_json() or {}
@@ -1676,7 +2052,14 @@ def api_create_task():
         priority=data.get('priority', '中'),
         project=project,
         project_id=project_id,
-        progress=data.get('progress', 0)
+        progress=int(data.get('progress', 0) or 0),
+        plan_start=data.get('plan_start', ''),
+        plan_end=data.get('plan_end', ''),
+        actual_start=data.get('actual_start', ''),
+        actual_end=data.get('actual_end', ''),
+        order_index=data.get('order_index'),
+        dependencies=data.get('dependencies'),
+        notes=data.get('notes', '')
     )
 
     SAMPLE_TASKS.append(new_task)
@@ -1981,6 +2364,23 @@ def editor_input_videos():
         status_options=TRAINING_STATUS_OPTIONS,
         summary=summary,
         overall_completion=overall_completion
+    )
+
+
+@app.route('/editor/gantt')
+@login_required
+@role_required('admin', 'editor')
+def editor_gantt():
+    user_tasks = filter_tasks_for_user(SAMPLE_TASKS, g.current_user)
+    serialized_tasks = [serialize_gantt_task(task) for task in filter_tasks_by_params(user_tasks, {})]
+    filters = collect_task_filters(user_tasks)
+    return render_template(
+        'gantt.html',
+        base_template='editor_layout.html',
+        initial_tasks=serialized_tasks,
+        filter_options=filters,
+        dependency_types=sorted(TASK_DEPENDENCY_TYPES),
+        current_view='plan'
     )
 
 
@@ -2647,6 +3047,23 @@ def admin_training_videos():
         status_options=TRAINING_STATUS_OPTIONS,
         summary=summary,
         overall_completion=overall_completion
+    )
+
+
+@app.route('/admin/gantt')
+@login_required
+@role_required('admin')
+def admin_gantt():
+    user_tasks = filter_tasks_for_user(SAMPLE_TASKS, g.current_user)
+    serialized_tasks = [serialize_gantt_task(task) for task in filter_tasks_by_params(user_tasks, {})]
+    filters = collect_task_filters(user_tasks)
+    return render_template(
+        'gantt.html',
+        base_template='layout.html',
+        initial_tasks=serialized_tasks,
+        filter_options=filters,
+        dependency_types=sorted(TASK_DEPENDENCY_TYPES),
+        current_view='plan'
     )
 
 
