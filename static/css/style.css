@@ -1014,6 +1014,128 @@ section h3 {
     background: #f8f9fa;
 }
 
+.finance-page .finance-section {
+    margin-top: 28px;
+}
+
+.collapsible-card {
+    border: 1px solid #000;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.12);
+    overflow: hidden;
+}
+
+.collapsible-summary {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 20px 24px;
+    cursor: pointer;
+    background: #f7fbff;
+}
+
+.collapsible-summary::-webkit-details-marker {
+    display: none;
+}
+
+.collapsible-summary h2 {
+    margin: 0;
+}
+
+.summary-note {
+    margin: 6px 0 0;
+    font-size: 0.92em;
+    color: #4a5f78;
+}
+
+.collapsible-actions {
+    display: flex;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.collapsible-body {
+    padding: 20px 24px 28px;
+    border-top: 1px solid #000;
+    background: #fff;
+}
+
+.finance-table-inner {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+}
+
+.finance-table-inner th,
+.finance-table-inner td {
+    border-bottom: 1px solid #000;
+    padding: 12px 14px;
+    text-align: left;
+}
+
+.finance-table-inner th.actions-col,
+.finance-table-inner td.actions-col {
+    width: 120px;
+}
+
+.finance-empty {
+    text-align: center;
+    padding: 32px;
+    border: 1px dashed #a0b3c9;
+    border-radius: 10px;
+    background: #fff;
+    color: #53657d;
+    font-size: 0.95em;
+}
+
+.finance-row .table-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.finance-modal .gantt-modal-content {
+    max-width: 460px;
+}
+
+.finance-form .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
+}
+
+.finance-form label {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #1f3a5f;
+}
+
+.finance-form input,
+.finance-form select {
+    border: 1px solid #000;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.95em;
+    background: #fff;
+}
+
+.finance-form input:focus,
+.finance-form select:focus {
+    outline: 2px solid #a8d3ff;
+    outline-offset: 1px;
+}
+
+.finance-form .form-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-top: 10px;
+}
+
 /* レポート・設定カード */
 .report-card,
 .setting-card {

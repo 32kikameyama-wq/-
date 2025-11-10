@@ -117,6 +117,42 @@ COMMENT_ID_COUNTER = count(1)
 PROJECT_VIDEO_ITEMS = {}
 PROJECT_COMMENTS = {}
 
+FINANCE_INVOICE_STATUS_DEFINITIONS = [
+    ('draft', '下書き'),
+    ('issued', '発行済'),
+    ('sent', '送付済'),
+    ('paid', '入金済'),
+    ('overdue', '入金遅延')
+]
+FINANCE_PAYOUT_STATUS_DEFINITIONS = [
+    ('pending', '未支払'),
+    ('scheduled', '支払予定'),
+    ('paid', '支払済')
+]
+
+FINANCE_INVOICE_STATUS_OPTIONS = [
+    {'value': value, 'label': label} for value, label in FINANCE_INVOICE_STATUS_DEFINITIONS
+]
+FINANCE_PAYOUT_STATUS_OPTIONS = [
+    {'value': value, 'label': label} for value, label in FINANCE_PAYOUT_STATUS_DEFINITIONS
+]
+FINANCE_INVOICE_STATUS_LABELS = {value: label for value, label in FINANCE_INVOICE_STATUS_DEFINITIONS}
+FINANCE_PAYOUT_STATUS_LABELS = {value: label for value, label in FINANCE_PAYOUT_STATUS_DEFINITIONS}
+
+FINANCE_INVOICES = [
+    {'id': 1, 'project_name': 'WebCM制作プロジェクトA', 'amount': 500000, 'status': 'paid', 'issue_date': '2025-01-20'},
+    {'id': 2, 'project_name': '企業紹介動画制作', 'amount': 800000, 'status': 'issued', 'issue_date': '2025-02-01'},
+    {'id': 3, 'project_name': 'SNS用ショート動画', 'amount': 200000, 'status': 'paid', 'issue_date': '2024-12-15'},
+]
+FINANCE_PAYOUTS = [
+    {'id': 1, 'editor': '田中', 'amount': 300000, 'project_name': 'WebCM制作プロジェクトA', 'status': 'paid'},
+    {'id': 2, 'editor': '佐藤', 'amount': 250000, 'project_name': '企業紹介動画制作', 'status': 'pending'},
+    {'id': 3, 'editor': '鈴木', 'amount': 150000, 'project_name': 'SNS用ショート動画', 'status': 'paid'},
+]
+
+FINANCE_INVOICE_ID_COUNTER = count(start=len(FINANCE_INVOICES) + 1)
+FINANCE_PAYOUT_ID_COUNTER = count(start=len(FINANCE_PAYOUTS) + 1)
+
 
 EDITOR_SHARED_SETTINGS = {}
 
@@ -2438,27 +2474,268 @@ def assets():
     all_projects = get_all_projects()
     return render_template('assets.html', assets=SAMPLE_ASSETS, projects=all_projects)
 
+
+def get_next_invoice_id():
+    return next(FINANCE_INVOICE_ID_COUNTER)
+
+
+def get_next_payout_id():
+    return next(FINANCE_PAYOUT_ID_COUNTER)
+
+
+def serialize_invoice(invoice: dict) -> dict:
+    return {
+        'id': invoice['id'],
+        'project_name': invoice['project_name'],
+        'amount': invoice['amount'],
+        'issue_date': invoice.get('issue_date', ''),
+        'status': invoice['status'],
+        'status_label': FINANCE_INVOICE_STATUS_LABELS.get(invoice['status'], invoice['status'])
+    }
+
+
+def serialize_payout(payout: dict) -> dict:
+    return {
+        'id': payout['id'],
+        'editor': payout['editor'],
+        'project_name': payout['project_name'],
+        'amount': payout['amount'],
+        'status': payout['status'],
+        'status_label': FINANCE_PAYOUT_STATUS_LABELS.get(payout['status'], payout['status'])
+    }
+
+
+def calculate_finance_summary():
+    total_revenue = sum(invoice.get('amount', 0) or 0 for invoice in FINANCE_INVOICES)
+    total_cost = sum(payout.get('amount', 0) or 0 for payout in FINANCE_PAYOUTS)
+    profit = total_revenue - total_cost
+    profit_rate = round((profit / total_revenue * 100), 1) if total_revenue else 0
+    return {
+        'total_revenue': total_revenue,
+        'total_cost': total_cost,
+        'profit': profit,
+        'profit_rate': profit_rate
+    }
+
+
+def normalize_amount(value, field_label: str) -> int:
+    if value is None:
+        raise ValueError(f'{field_label}は必須です')
+    if isinstance(value, (int, float)):
+        amount = int(value)
+    else:
+        cleaned = str(value).replace(',', '').strip()
+        if not cleaned:
+            raise ValueError(f'{field_label}は必須です')
+        try:
+            amount = int(float(cleaned))
+        except (TypeError, ValueError):
+            raise ValueError(f'{field_label}は数値で入力してください')
+    if amount < 0:
+        raise ValueError(f'{field_label}は0以上の数値で入力してください')
+    return amount
+
+
+def normalize_date_string(value: str | None, field_label: str) -> str:
+    if not value:
+        return ''
+    value = value.strip()
+    try:
+        datetime.strptime(value, '%Y-%m-%d')
+    except ValueError:
+        raise ValueError(f'{field_label}はYYYY-MM-DD形式で入力してください')
+    return value
+
+
+def validate_invoice_payload(data: dict) -> tuple[dict, list[str]]:
+    errors = []
+    project_name = (data.get('project_name') or '').strip()
+    status = (data.get('status') or 'draft').strip()
+    issue_date_raw = data.get('issue_date')
+
+    if not project_name:
+        errors.append('案件名は必須です')
+
+    if status not in FINANCE_INVOICE_STATUS_LABELS:
+        errors.append('請求ステータスが不正です')
+
+    amount = None
+    try:
+        amount = normalize_amount(data.get('amount'), '請求金額')
+    except ValueError as exc:
+        errors.append(str(exc))
+
+    issue_date = ''
+    if issue_date_raw:
+        try:
+            issue_date = normalize_date_string(issue_date_raw, '発行日')
+        except ValueError as exc:
+            errors.append(str(exc))
+
+    payload = {
+        'project_name': project_name,
+        'amount': amount,
+        'status': status,
+        'issue_date': issue_date
+    }
+    return payload, errors
+
+
+def validate_payout_payload(data: dict) -> tuple[dict, list[str]]:
+    errors = []
+    editor = (data.get('editor') or '').strip()
+    project_name = (data.get('project_name') or '').strip()
+    status = (data.get('status') or 'pending').strip()
+
+    if not editor:
+        errors.append('編集者名は必須です')
+    if not project_name:
+        errors.append('案件名は必須です')
+
+    if status not in FINANCE_PAYOUT_STATUS_LABELS:
+        errors.append('支払ステータスが不正です')
+
+    amount = None
+    try:
+        amount = normalize_amount(data.get('amount'), '支払金額')
+    except ValueError as exc:
+        errors.append(str(exc))
+
+    payload = {
+        'editor': editor,
+        'project_name': project_name,
+        'amount': amount,
+        'status': status
+    }
+    return payload, errors
+
+
+def get_invoice_by_id(invoice_id: int) -> dict | None:
+    return next((invoice for invoice in FINANCE_INVOICES if invoice['id'] == invoice_id), None)
+
+
+def get_payout_by_id(payout_id: int) -> dict | None:
+    return next((payout for payout in FINANCE_PAYOUTS if payout['id'] == payout_id), None)
+
+
 @app.route('/finance')
 def finance():
     """請求・収支"""
-    # サンプルデータ
+    summary = calculate_finance_summary()
     finance_data = {
-        'total_revenue': 1500000,
-        'total_cost': 800000,
-        'profit': 700000,
-        'profit_rate': 46.7,
-        'invoices': [
-            {'id': 1, 'project_name': 'WebCM制作プロジェクトA', 'amount': 500000, 'status': 'paid', 'issue_date': '2025-01-20'},
-            {'id': 2, 'project_name': '企業紹介動画制作', 'amount': 800000, 'status': 'issued', 'issue_date': '2025-02-01'},
-            {'id': 3, 'project_name': 'SNS用ショート動画', 'amount': 200000, 'status': 'paid', 'issue_date': '2024-12-15'},
-        ],
-        'payouts': [
-            {'id': 1, 'editor': 'テスト', 'amount': 300000, 'project_name': 'WebCM制作プロジェクトA', 'status': 'paid'},
-            {'id': 2, 'editor': 'テスト', 'amount': 250000, 'project_name': '企業紹介動画制作', 'status': 'pending'},
-            {'id': 3, 'editor': 'テスト', 'amount': 150000, 'project_name': 'SNS用ショート動画', 'status': 'paid'},
-        ]
+        **summary,
+        'invoices': [serialize_invoice(invoice) for invoice in FINANCE_INVOICES],
+        'payouts': [serialize_payout(payout) for payout in FINANCE_PAYOUTS]
     }
-    return render_template('finance.html', finance_data=finance_data)
+    return render_template(
+        'finance.html',
+        finance_data=finance_data,
+        invoice_status_options=FINANCE_INVOICE_STATUS_OPTIONS,
+        payout_status_options=FINANCE_PAYOUT_STATUS_OPTIONS,
+        invoice_status_labels=FINANCE_INVOICE_STATUS_LABELS,
+        payout_status_labels=FINANCE_PAYOUT_STATUS_LABELS
+    )
+
+
+@app.route('/api/finance/invoices', methods=['POST'])
+@login_required
+@role_required('admin')
+def api_create_invoice():
+    data = request.get_json(silent=True) or {}
+    payload, errors = validate_invoice_payload(data)
+    if errors:
+        return jsonify({'status': 'error', 'message': ' / '.join(errors)}), 400
+
+    invoice = {
+        'id': get_next_invoice_id(),
+        **payload
+    }
+    FINANCE_INVOICES.append(invoice)
+    summary = calculate_finance_summary()
+    return jsonify({
+        'status': 'success',
+        'message': '請求を追加しました',
+        'data': {
+            'invoice': serialize_invoice(invoice),
+            'summary': summary
+        }
+    })
+
+
+@app.route('/api/finance/invoices/<int:invoice_id>', methods=['PUT'])
+@login_required
+@role_required('admin')
+def api_update_invoice(invoice_id):
+    invoice = get_invoice_by_id(invoice_id)
+    if not invoice:
+        return jsonify({'status': 'error', 'message': '請求が見つかりません'}), 404
+
+    data = request.get_json(silent=True) or {}
+    payload, errors = validate_invoice_payload(data)
+    if errors:
+        return jsonify({'status': 'error', 'message': ' / '.join(errors)}), 400
+
+    invoice.update(payload)
+    summary = calculate_finance_summary()
+    return jsonify({
+        'status': 'success',
+        'message': '請求を更新しました',
+        'data': {
+            'invoice': serialize_invoice(invoice),
+            'summary': summary
+        }
+    })
+
+
+@app.route('/api/finance/payouts', methods=['POST'])
+@login_required
+@role_required('admin')
+def api_create_payout():
+    data = request.get_json(silent=True) or {}
+    payload, errors = validate_payout_payload(data)
+    if errors:
+        return jsonify({'status': 'error', 'message': ' / '.join(errors)}), 400
+
+    payout = {
+        'id': get_next_payout_id(),
+        **payload
+    }
+    FINANCE_PAYOUTS.append(payout)
+    summary = calculate_finance_summary()
+    return jsonify({
+        'status': 'success',
+        'message': '支払を追加しました',
+        'data': {
+            'payout': serialize_payout(payout),
+            'summary': summary
+        }
+    })
+
+
+@app.route('/api/finance/payouts/<int:payout_id>', methods=['PUT'])
+@login_required
+@role_required('admin')
+def api_update_payout(payout_id):
+    payout = get_payout_by_id(payout_id)
+    if not payout:
+        return jsonify({'status': 'error', 'message': '支払が見つかりません'}), 404
+
+    data = request.get_json(silent=True) or {}
+    payload, errors = validate_payout_payload(data)
+    if errors:
+        return jsonify({'status': 'error', 'message': ' / '.join(errors)}), 400
+
+    payout.update(payload)
+    summary = calculate_finance_summary()
+    return jsonify({
+        'status': 'success',
+        'message': '支払を更新しました',
+        'data': {
+            'payout': serialize_payout(payout),
+            'summary': summary
+        }
+    })
+
 
 @app.route('/reports')
 def reports():
