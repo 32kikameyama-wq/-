@@ -597,6 +597,7 @@ SAMPLE_COMPANIES = [
             {
                 'id': 1,
                 'name': '監査',
+                'color': '#3b82f6',
                 'status': '進行中',
                 'due_date': '2025-04-10',
                 'assignee': '(完)テスト',
@@ -609,6 +610,7 @@ SAMPLE_COMPANIES = [
             {
                 'id': 2,
                 'name': '構造',
+                'color': '#facc15',
                 'status': '進行中',
                 'due_date': '2025-04-10',
                 'assignee': '(完)テスト',
@@ -621,6 +623,7 @@ SAMPLE_COMPANIES = [
             {
                 'id': 3,
                 'name': '工法',
+                'color': '#22c55e',
                 'status': '進行中',
                 'due_date': '2025-04-10',
                 'assignee': '(未)テスト',
@@ -640,6 +643,7 @@ SAMPLE_COMPANIES = [
             {
                 'id': 4,
                 'name': '商品プロモーション動画',
+                'color': '#f97316',
                 'status': '進行中',
                 'due_date': '2025-04-15',
                 'assignee': '(完)テスト',
@@ -652,6 +656,7 @@ SAMPLE_COMPANIES = [
             {
                 'id': 5,
                 'name': '企業紹介動画',
+                'color': '#ef4444',
                 'status': 'レビュー中',
                 'due_date': '2025-04-20',
                 'assignee': '(完)テスト',
@@ -671,6 +676,7 @@ SAMPLE_COMPANIES = [
             {
                 'id': 6,
                 'name': 'SNS用ショート動画',
+                'color': '#8b5cf6',
                 'status': '完了',
                 'due_date': '2025-03-20',
                 'assignee': '(完)テスト',
@@ -759,6 +765,18 @@ AUTO_STAGE_TEMPLATES = [
     {'key': 'delivery', 'title': '納品', 'duration': 1},
 ]
 
+PROJECT_COLOR_PALETTE = [
+    '#3b82f6',  # blue
+    '#facc15',  # amber
+    '#22c55e',  # green
+    '#f87171',  # red
+    '#8b5cf6',  # purple
+    '#14b8a6',  # teal
+    '#f97316',  # orange
+    '#64748b',  # slate
+]
+PROJECT_COLOR_ASSIGNMENTS: dict[int, list[str]] = {}
+
 
 def parse_iso_date(value, fallback=None):
     if not value:
@@ -777,7 +795,27 @@ def next_task_id():
     return next(TASK_ID_COUNTER)
 
 
-def build_auto_gantt_tasks(project: dict, company_name: str):
+def ensure_project_color(company_id: int, project: dict) -> str:
+    if project.get('color'):
+        color = project['color']
+        assigned = PROJECT_COLOR_ASSIGNMENTS.setdefault(company_id, [])
+        if color not in assigned:
+            assigned.append(color)
+        return color
+
+    assigned = PROJECT_COLOR_ASSIGNMENTS.setdefault(company_id, [])
+    palette = PROJECT_COLOR_PALETTE
+    available = [c for c in palette if c not in assigned]
+    if not available:
+        color = palette[len(assigned) % len(palette)]
+    else:
+        color = available[0]
+    project['color'] = color
+    assigned.append(color)
+    return color
+
+
+def build_auto_gantt_tasks(project: dict, company_name: str, color: str):
     axis = project.get('video_axis', 'LONG')
     stage_templates = []
     for template in AUTO_STAGE_TEMPLATES:
@@ -870,6 +908,7 @@ def build_auto_gantt_tasks(project: dict, company_name: str):
             'project_id': project['id'],
             'project_name': project.get('name'),
             'company_name': company_name,
+            'color': color,
             'type': 'AUTO',
             'status': status,
             'assignee': project.get('assignee', '未割当'),
@@ -898,11 +937,14 @@ def build_auto_gantt_tasks(project: dict, company_name: str):
     return auto_tasks
 
 
-def initialize_project_gantt_tasks(project: dict, company_name: str):
+def initialize_project_gantt_tasks(project: dict, company_name: str, company_id: int):
     project_id = project['id']
+    project.setdefault('company_id', company_id)
+    project.setdefault('company_name', company_name)
+    project_color = ensure_project_color(company_id, project)
     project_tasks = PROJECT_GANTT_TASKS.setdefault(project_id, [])
     existing_auto = {task.get('auto_stage'): task for task in project_tasks if task.get('task_origin') == 'auto'}
-    generated = build_auto_gantt_tasks(project, company_name)
+    generated = build_auto_gantt_tasks(project, company_name, project_color)
 
     seen_stages = set()
     for auto_task in generated:
@@ -913,6 +955,7 @@ def initialize_project_gantt_tasks(project: dict, company_name: str):
             existing.update({
                 'project_name': auto_task['project_name'],
                 'company_name': auto_task['company_name'],
+                'color': project_color,
                 'plan_start': auto_task['plan_start'],
                 'plan_end': auto_task['plan_end'],
                 'due_date': auto_task['due_date'],
@@ -967,9 +1010,11 @@ def find_task_with_container(task_id: int):
 
 
 def initialize_all_project_tasks():
+    PROJECT_COLOR_ASSIGNMENTS.clear()
     for company in SAMPLE_COMPANIES:
         for project in company['projects']:
-            initialize_project_gantt_tasks(project, company['name'])
+            project.setdefault('company_id', company['id'])
+            initialize_project_gantt_tasks(project, company['name'], company['id'])
     rebuild_task_cache()
 
 
@@ -1003,12 +1048,18 @@ def create_task_entry(
     created_by: str = None,
     updated_by: str = None,
     notes: str = '',
+    company_id: int = None,
+    company_name: str = None,
+    project_color: str = None,
     origin: str = 'manual'
 ):
     project_name = ''
     if project:
         project_name = project.get('name', '')
         project_id = project.get('id')
+        company_id = company_id or project.get('company_id')
+        company_name = company_name or project.get('company_name')
+        project_color = project_color or project.get('color')
     task_type = (task_type or 'OTHER').upper()
     normalized_dependencies = []
     if dependencies:
@@ -1030,11 +1081,17 @@ def create_task_entry(
             plan_start = ''
     if not plan_end:
         plan_end = due_date or plan_start
+    color = project_color
+    if project_id and not color and company_id:
+        project_color = ensure_project_color(company_id, project or {'id': project_id, 'company_id': company_id})
+        color = project_color
     task = {
         'id': next_task_id(),
         'title': title,
         'project_name': project_name,
         'project_id': project_id,
+        'company_name': company_name or (project or {}).get('company_name'),
+        'color': color,
         'type': task_type,
         'status': status,
         'assignee': assignee,
@@ -1411,7 +1468,8 @@ def build_project_detail_context(project_id):
 
     company = next((c for c in SAMPLE_COMPANIES if c['id'] == project.get('company_id')), None)
 
-    initialize_project_gantt_tasks(project, company['name'] if company else project.get('company'))
+    company_id = company['id'] if company else project.get('company_id')
+    initialize_project_gantt_tasks(project, company['name'] if company else project.get('company'), company_id)
     project_tasks = get_project_tasks(project_id)
 
     video_items = copy.deepcopy(ensure_video_items(project_id, project))
@@ -1598,7 +1656,7 @@ def api_update_project(project_id):
     project['delivered'] = data.get('delivered', project.get('delivered', False))
 
     if company:
-        initialize_project_gantt_tasks(project, company['name'])
+        initialize_project_gantt_tasks(project, company['name'], company['id'])
         rebuild_task_cache()
     
     # 案件名が変更された場合、関連するタスクの案件名も更新
@@ -1677,8 +1735,9 @@ def api_create_project():
     
     # 実際の実装ではデータベースに保存
     # ここではサンプルデータに追加
+    new_project['company_id'] = company_id
     company['projects'].append(new_project)
-    initialize_project_gantt_tasks(new_project, company['name'])
+    initialize_project_gantt_tasks(new_project, company['name'], company_id)
     rebuild_task_cache()
     global SAMPLE_PROJECTS, PROJECT_NAME_TO_ID
     SAMPLE_PROJECTS = get_all_projects()
@@ -1735,7 +1794,7 @@ def api_toggle_delivered(project_id):
         project['delivery_date'] = ''
 
     if company:
-        initialize_project_gantt_tasks(project, company['name'])
+        initialize_project_gantt_tasks(project, company['name'], company['id'])
         rebuild_task_cache()
     
     return jsonify({
@@ -1794,6 +1853,9 @@ def api_add_project_task(project_id):
     if not title:
         return jsonify({'status': 'error', 'message': 'タスク名は必須です'}), 400
     company_name = company['name'] if company else None
+    if company_name:
+        project.setdefault('company_name', company_name)
+        project.setdefault('company_id', company['id'])
 
     task = create_task_entry(
         title=title,
@@ -1811,6 +1873,9 @@ def api_add_project_task(project_id):
         actual_end=data.get('actual_end', ''),
         dependencies=data.get('dependencies'),
         notes=data.get('notes', ''),
+        company_id=company['id'] if company else project.get('company_id'),
+        company_name=company_name,
+        project_color=project.get('color'),
         origin='manual'
     )
     project_tasks = PROJECT_GANTT_TASKS.setdefault(project_id, [])
@@ -2129,15 +2194,25 @@ def api_update_task(task_id):
         new_project_id = data.get('project_id', task.get('project_id'))
         new_project_name = data.get('project_name')
         project = None
+        company_name = None
+        project_color = task.get('color')
         if new_project_id:
             project, company = find_project_by_id(int(new_project_id))
             if not project:
                 return jsonify({'status': 'error', 'message': '対象の案件が見つかりません'}), 404
             new_project_name = project.get('name')
+            company_name = company['name'] if company else None
+            company_id = company['id'] if company else project.get('company_id')
+            if company_id:
+                project_color = ensure_project_color(company_id, project)
         elif new_project_name:
             new_project_id = PROJECT_NAME_TO_ID.get(new_project_name)
             if new_project_id:
-                project, _ = find_project_by_id(new_project_id)
+                project, company = find_project_by_id(new_project_id)
+                company_name = company['name'] if company else None
+                company_id = company['id'] if company else project.get('company_id')
+                if company_id and project:
+                    project_color = ensure_project_color(company_id, project)
         record_task_history(task, 'project_id', task.get('project_id'), new_project_id, actor)
         record_task_history(task, 'project_name', task.get('project_name'), new_project_name, actor)
 
@@ -2157,6 +2232,10 @@ def api_update_task(task_id):
 
         task['project_id'] = new_project_id
         task['project_name'] = new_project_name
+        if company_name:
+            task['company_name'] = company_name
+        if project_color:
+            task['color'] = project_color
 
     if 'dependencies' in data:
         deps_payload = data['dependencies'] or []
@@ -2210,6 +2289,9 @@ def api_create_task():
         project, company = find_project_by_id(project_id)
         if not project:
             return jsonify({'status': 'error', 'message': '対象の案件が見つかりません'}), 404
+        if company:
+            project.setdefault('company_name', company['name'])
+            project.setdefault('company_id', company['id'])
         data['project_name'] = project.get('name')
         company_name = company['name'] if company else None
     else:
@@ -2237,7 +2319,10 @@ def api_create_task():
         actual_end=data.get('actual_end', ''),
         order_index=data.get('order_index'),
         dependencies=data.get('dependencies'),
-        notes=data.get('notes', '')
+        notes=data.get('notes', ''),
+        company_id=company['id'] if company else None,
+        company_name=company_name,
+        project_color=project.get('color') if project else None
     )
 
     if project_id:
