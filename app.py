@@ -1271,6 +1271,7 @@ def summarize_projects_for_gantt() -> list[dict]:
         company_id = company['id']
         for project in company['projects']:
             project_id = project['id']
+            initialize_project_gantt_tasks(project, company['name'], company_id)
             color = ensure_project_color(company_id, project)
             tasks = PROJECT_GANTT_TASKS.get(project_id, [])
             manual_tasks = [task for task in GENERAL_TASKS if task.get('project_id') == project_id]
@@ -1285,11 +1286,16 @@ def summarize_projects_for_gantt() -> list[dict]:
                 'range': {'plan_start': None, 'plan_end': None}
             }
 
-            for index, task in enumerate(sorted(combined, key=lambda t: (t.get('order_index') or index))):
-                plan_start = task.get('plan_start') or task.get('due_date')
-                plan_end = task.get('plan_end') or task.get('due_date')
+            for index, task in enumerate(sorted(combined, key=lambda t: (t.get('order_index') or (index + 1), t.get('plan_start') or ''))):
+                plan_start = task.get('plan_start') or task.get('actual_start') or project.get('due_date') or task.get('due_date')
+                plan_end = task.get('plan_end') or task.get('actual_end') or project.get('due_date') or plan_start
                 actual_start = task.get('actual_start')
-                actual_end = task.get('actual_end')
+                actual_end = task.get('actual_end') or (project.get('delivery_date') if task.get('status') == '完了' else '')
+
+                if not plan_start:
+                    plan_start = datetime.now().strftime('%Y-%m-%d')
+                if not plan_end:
+                    plan_end = plan_start
 
                 entry['phases'].append({
                     'title': task.get('title'),

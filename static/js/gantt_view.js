@@ -79,7 +79,6 @@
         refs.emptyState = document.getElementById('gantt-empty-state');
         refs.addButton = document.getElementById('gantt-add-task-btn');
         refs.refreshButton = document.getElementById('gantt-refresh-btn');
-        refs.emptyAddButton = document.getElementById('gantt-empty-add-btn');
         refs.summaryContainer = document.getElementById('gantt-summary');
         refs.filterProject = document.getElementById('gantt-filter-project');
         refs.filterAssignee = document.getElementById('gantt-filter-assignee');
@@ -128,7 +127,6 @@
     function bindEvents() {
         if (refs.addButton) refs.addButton.addEventListener('click', openTaskModal);
         if (refs.refreshButton) refs.refreshButton.addEventListener('click', () => refreshTasks({ showLoading: true }));
-        if (refs.emptyAddButton) refs.emptyAddButton.addEventListener('click', openTaskModal);
         if (refs.filterApply) refs.filterApply.addEventListener('click', applyFilters);
         if (refs.filterReset) refs.filterReset.addEventListener('click', resetFilters);
 
