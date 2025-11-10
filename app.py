@@ -993,6 +993,16 @@ def get_all_tasks():
     return copy.deepcopy(TASK_CACHE)
 
 
+def gather_project_tasks():
+    tasks = []
+    for project_id, project_tasks in PROJECT_GANTT_TASKS.items():
+        for task in project_tasks:
+            tasks.append(copy.deepcopy(task))
+    for task in GENERAL_TASKS:
+        tasks.append(copy.deepcopy(task))
+    return tasks
+
+
 def get_project_tasks(project_id: int):
     tasks = PROJECT_GANTT_TASKS.get(project_id, [])
     return copy.deepcopy(sorted(tasks, key=lambda t: (t.get('order_index') or 9999, t.get('id'))))
@@ -1246,8 +1256,8 @@ def collect_task_filters(tasks: list):
     }
 
 
-def summarize_projects_for_gantt(tasks: list[dict]) -> list[dict]:
-    summary = {}
+def summarize_projects_for_gantt() -> list[dict]:
+    summary = []
 
     def normalize_date(value):
         if not value:
@@ -1257,66 +1267,62 @@ def summarize_projects_for_gantt(tasks: list[dict]) -> list[dict]:
         except ValueError:
             return None
 
-    for task in tasks:
-        project_id = task.get('project_id')
-        if not project_id:
-            continue
-        key = project_id
-        entry = summary.setdefault(
-            key,
-            {
+    for company in SAMPLE_COMPANIES:
+        company_id = company['id']
+        for project in company['projects']:
+            project_id = project['id']
+            color = ensure_project_color(company_id, project)
+            tasks = PROJECT_GANTT_TASKS.get(project_id, [])
+            manual_tasks = [task for task in GENERAL_TASKS if task.get('project_id') == project_id]
+            combined = list(tasks) + manual_tasks
+
+            entry = {
                 'project_id': project_id,
-                'project_name': task.get('project_name'),
-                'company_name': task.get('company_name'),
-                'color': task.get('color'),
+                'project_name': project.get('name'),
+                'company_name': company['name'],
+                'color': color,
                 'phases': [],
                 'range': {'plan_start': None, 'plan_end': None}
             }
-        )
-        entry['project_name'] = entry['project_name'] or task.get('project_name')
-        entry['company_name'] = entry['company_name'] or task.get('company_name')
-        if task.get('color'):
-            entry['color'] = task['color']
 
-        plan_start = task.get('plan_start') or task.get('due_date')
-        plan_end = task.get('plan_end') or task.get('due_date')
-        actual_start = task.get('actual_start')
-        actual_end = task.get('actual_end')
+            for index, task in enumerate(sorted(combined, key=lambda t: (t.get('order_index') or index))):
+                plan_start = task.get('plan_start') or task.get('due_date')
+                plan_end = task.get('plan_end') or task.get('due_date')
+                actual_start = task.get('actual_start')
+                actual_end = task.get('actual_end')
 
-        entry['phases'].append({
-            'title': task.get('title'),
-            'status': task.get('status'),
-            'plan_start': plan_start,
-            'plan_end': plan_end,
-            'actual_start': actual_start,
-            'actual_end': actual_end,
-            'origin': task.get('task_origin', 'manual'),
-            'auto_stage': task.get('auto_stage'),
-            'order_index': task.get('order_index')
-        })
+                entry['phases'].append({
+                    'title': task.get('title'),
+                    'status': task.get('status'),
+                    'plan_start': plan_start,
+                    'plan_end': plan_end,
+                    'actual_start': actual_start,
+                    'actual_end': actual_end,
+                    'origin': task.get('task_origin', 'manual'),
+                    'auto_stage': task.get('auto_stage'),
+                    'order_index': task.get('order_index') or (index + 1)
+                })
 
-        start_dt = normalize_date(plan_start) or normalize_date(actual_start)
-        end_dt = normalize_date(plan_end) or normalize_date(actual_end) or start_dt
-        if start_dt:
-            current_start = entry['range']['plan_start']
-            if current_start is None or start_dt < current_start:
-                entry['range']['plan_start'] = start_dt
-        if end_dt:
-            current_end = entry['range']['plan_end']
-            if current_end is None or end_dt > current_end:
-                entry['range']['plan_end'] = end_dt
+                start_dt = normalize_date(plan_start) or normalize_date(actual_start)
+                end_dt = normalize_date(plan_end) or normalize_date(actual_end) or start_dt
+                if start_dt:
+                    current_start = entry['range']['plan_start']
+                    if current_start is None or start_dt < current_start:
+                        entry['range']['plan_start'] = start_dt
+                if end_dt:
+                    current_end = entry['range']['plan_end']
+                    if current_end is None or end_dt > current_end:
+                        entry['range']['plan_end'] = end_dt
 
-    result = []
-    for project_id, entry in summary.items():
-        entry['phases'].sort(key=lambda phase: (phase.get('order_index') or 9999, phase.get('plan_start') or ''))
-        if entry['range']['plan_start'] is not None:
-            entry['range']['plan_start'] = entry['range']['plan_start'].strftime('%Y-%m-%d')
-        if entry['range']['plan_end'] is not None:
-            entry['range']['plan_end'] = entry['range']['plan_end'].strftime('%Y-%m-%d')
-        result.append(entry)
+            if entry['range']['plan_start'] is not None:
+                entry['range']['plan_start'] = entry['range']['plan_start'].strftime('%Y-%m-%d')
+            if entry['range']['plan_end'] is not None:
+                entry['range']['plan_end'] = entry['range']['plan_end'].strftime('%Y-%m-%d')
 
-    result.sort(key=lambda item: (item.get('company_name') or '', item.get('project_name') or ''))
-    return result
+            summary.append(entry)
+
+    summary.sort(key=lambda item: (item.get('company_name') or '', item.get('project_name') or ''))
+    return summary
 
 
 # 全案件をフラット化（全社統合ビュー用）
@@ -2143,8 +2149,8 @@ def api_task_detail(task_id):
 @login_required
 def api_gantt_tasks():
     current_user = g.current_user
-    all_tasks = get_all_tasks()
-    user_tasks = filter_tasks_for_user(all_tasks, current_user)
+    base_tasks = gather_project_tasks()
+    user_tasks = filter_tasks_for_user(base_tasks, current_user)
 
     params = {
         'project_id': request.args.get('project_id'),
@@ -2171,7 +2177,7 @@ def api_gantt_tasks():
         for entry in all_tasks_payload:
             entry.pop('history', None)
 
-    project_summary = summarize_projects_for_gantt(user_tasks)
+    project_summary = summarize_projects_for_gantt()
 
     return jsonify({
         'status': 'success',
