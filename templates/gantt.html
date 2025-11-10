@@ -81,6 +81,16 @@
 
 <div class="gantt-layout">
     <div class="gantt-main">
+        <section class="gantt-summary-section">
+            <header class="gantt-summary-header">
+                <div class="summary-title">年間マイルストン概要</div>
+                <div class="summary-legend">
+                    <span class="legend-swatch auto"></span>自動生成フェーズ
+                    <span class="legend-swatch manual"></span>手動追加タスク
+                </div>
+            </header>
+            <div id="gantt-summary" class="gantt-summary"></div>
+        </section>
         <div class="gantt-viewport">
             <div id="gantt-container" class="gantt-container" aria-label="Gantt chart timeline"></div>
             <div id="gantt-empty-state" class="gantt-empty-state" hidden>

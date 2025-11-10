@@ -3624,6 +3624,220 @@ section h3 {
     padding: 16px 18px 22px;
 }
 
+.gantt-summary-section {
+    margin-bottom: 18px;
+    background: linear-gradient(180deg, rgba(244, 248, 255, 0.9), rgba(236, 245, 255, 0.9));
+    border: 1px solid rgba(168, 190, 221, 0.6);
+    border-radius: 14px;
+    padding: 16px 18px;
+}
+
+.gantt-summary-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.summary-title {
+    font-size: 1.05em;
+    font-weight: 600;
+    color: #1f3654;
+}
+
+.summary-legend {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.85em;
+    color: #3a4a62;
+}
+
+.legend-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    margin-right: 4px;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.legend-swatch.auto {
+    background: rgba(80, 120, 210, 0.85);
+}
+
+.legend-swatch.manual {
+    background: rgba(255, 164, 122, 0.9);
+}
+
+.gantt-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-x: auto;
+}
+
+.gantt-summary-empty {
+    padding: 24px;
+    text-align: center;
+    color: #5c6b80;
+    font-size: 0.95em;
+}
+
+.summary-grid {
+    display: grid;
+    align-items: stretch;
+    border: 1px solid rgba(168, 190, 221, 0.6);
+    border-radius: 12px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 4px 14px rgba(13, 40, 70, 0.08);
+}
+
+.summary-header {
+    background: linear-gradient(180deg, rgba(226, 236, 255, 0.9), rgba(214, 229, 255, 0.9));
+    font-weight: 600;
+    color: #1c2f4a;
+}
+
+.summary-cell {
+    padding: 14px 16px;
+    border-right: 1px solid rgba(211, 224, 244, 0.8);
+    border-bottom: 1px solid rgba(211, 224, 244, 0.6);
+    font-size: 0.9em;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #fff;
+}
+
+.summary-cell:last-child {
+    border-right: none;
+}
+
+.summary-row .summary-cell {
+    border-bottom: none;
+}
+
+.summary-cell--head {
+    justify-content: center;
+    font-size: 0.88em;
+    letter-spacing: 0.02em;
+}
+
+.summary-cell--month {
+    justify-content: center;
+    font-size: 0.8em;
+    color: #51627a;
+    background: rgba(243, 248, 255, 0.9);
+}
+
+.summary-project {
+    gap: 12px;
+}
+
+.project-index {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid #3b82f6;
+    color: #3b82f6;
+    font-weight: 700;
+    font-size: 0.92em;
+}
+
+.project-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    line-height: 1.2;
+}
+
+.project-name {
+    font-weight: 600;
+    color: #1c2f4a;
+}
+
+.project-company {
+    font-size: 0.8em;
+    color: #64748b;
+}
+
+.summary-phases ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.summary-phases li {
+    font-size: 0.85em;
+    color: #2a3b55;
+}
+
+.phase-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: rgba(255, 164, 122, 0.2);
+    color: #f97316;
+    font-size: 0.7em;
+    border: 1px solid rgba(249, 115, 22, 0.35);
+    margin-left: 6px;
+}
+
+.summary-timeline {
+    flex-direction: column;
+    width: 100%;
+}
+
+.timeline-grid {
+    display: grid;
+    grid-auto-rows: 40px;
+    position: relative;
+    width: 100%;
+    min-height: 48px;
+    background: rgba(244, 248, 255, 0.6);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.timeline-cell {
+    border-right: 1px dashed rgba(166, 186, 217, 0.8);
+    background: rgba(255, 255, 255, 0.45);
+}
+
+.timeline-cell:last-child {
+    border-right: none;
+}
+
+.summary-bar {
+    position: relative;
+    height: 18px;
+    border-radius: 999px;
+    align-self: center;
+    margin: 0 6px;
+    box-shadow: 0 4px 10px rgba(17, 40, 72, 0.18);
+    opacity: 0.9;
+    grid-row: 1;
+}
+
+.summary-bar.manual {
+    background: rgba(255, 164, 122, 0.9) !important;
+}
+
+.summary-bar.auto {
+    background: rgba(67, 132, 242, 0.95);
+}
+
+.summary-grid.summary-row + .summary-grid.summary-row {
+    margin-top: 10px;
+}
 .gantt-viewport {
     position: relative;
     overflow-x: auto;

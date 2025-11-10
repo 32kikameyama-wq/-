@@ -4,6 +4,7 @@
         filteredTasks: [],
         taskMap: new Map(),
         selectedTaskId: null,
+        projectSummary: [],
         dependenciesBuffer: [],
         view: (window.GANTT_CURRENT_VIEW || 'plan'),
         role: window.GANTT_USER_ROLE || 'editor',
@@ -68,6 +69,7 @@
         refs.addButton = document.getElementById('gantt-add-task-btn');
         refs.refreshButton = document.getElementById('gantt-refresh-btn');
         refs.emptyAddButton = document.getElementById('gantt-empty-add-btn');
+        refs.summaryContainer = document.getElementById('gantt-summary');
         refs.filterProject = document.getElementById('gantt-filter-project');
         refs.filterAssignee = document.getElementById('gantt-filter-assignee');
         refs.filterStatus = document.getElementById('gantt-filter-status');
@@ -297,6 +299,7 @@
         }
 
         applyBarColors();
+        renderProjectSummary();
     }
 
     function convertToGanttItem(task) {
@@ -437,6 +440,7 @@
                     populateFilterOptions(json.meta.filters || {});
                     populateProjectSelect(json.meta.filters || {});
                 }
+                state.projectSummary = json.meta?.projects_summary || [];
 
                 renderGantt();
 
@@ -454,6 +458,7 @@
                 refs.container?.classList.remove('loading');
                 refs.viewport?.classList.remove('is-loading');
                 applyBarColors();
+                renderProjectSummary();
             });
     }
 
@@ -814,6 +819,110 @@
                 taskObj.$bar.setAttribute('opacity', 0.95);
             }
         });
+    }
+
+    function renderProjectSummary() {
+        if (!refs.summaryContainer) return;
+        const projects = state.projectSummary || [];
+        if (!projects.length) {
+            refs.summaryContainer.innerHTML = '<div class="gantt-summary-empty">表示できる案件がありません。フィルタ条件を変更してください。</div>';
+            return;
+        }
+
+        const months = buildSummaryMonths(projects);
+        const header = `
+            <div class="summary-grid summary-header" style="grid-template-columns: 220px 200px repeat(${months.length}, 1fr);">
+                <div class="summary-cell summary-cell--head">案件 / 会社</div>
+                <div class="summary-cell summary-cell--head">フェーズ一覧</div>
+                ${months.map(m => `<div class="summary-cell summary-cell--month">${m.label}</div>`).join('')}
+            </div>
+        `;
+        const rows = projects.map((project, index) => createSummaryRow(project, index + 1, months)).join('');
+        refs.summaryContainer.innerHTML = header + rows;
+    }
+
+    function buildSummaryMonths(projects) {
+        let minDate = null;
+        let maxDate = null;
+        projects.forEach(project => {
+            const start = project.range?.plan_start;
+            const end = project.range?.plan_end;
+            const startDate = start ? new Date(start) : null;
+            const endDate = end ? new Date(end) : null;
+            if (startDate && (!minDate || startDate < minDate)) minDate = startDate;
+            if (endDate && (!maxDate || endDate > maxDate)) maxDate = endDate;
+        });
+
+        if (!minDate || !maxDate) {
+            const today = new Date();
+            minDate = new Date(today.getFullYear(), today.getMonth(), 1);
+            maxDate = new Date(today.getFullYear(), today.getMonth() + 5, 1);
+        }
+
+        const months = [];
+        const cursor = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+        const endCursor = new Date(maxDate.getFullYear(), maxDate.getMonth(), 1);
+
+        while (cursor <= endCursor) {
+            months.push({
+                year: cursor.getFullYear(),
+                month: cursor.getMonth(),
+                label: `${cursor.getFullYear()}年${cursor.getMonth() + 1}月`,
+                index: months.length + 1
+            });
+            cursor.setMonth(cursor.getMonth() + 1);
+        }
+
+        return months;
+    }
+
+    function createSummaryRow(project, displayIndex, months) {
+        const color = project.color || '#3b82f6';
+        const phases = project.phases || [];
+
+        const monthLookup = (dateStr) => {
+            if (!dateStr) return null;
+            const date = new Date(dateStr);
+            if (Number.isNaN(date.getTime())) return null;
+            const target = months.findIndex(m => m.year === date.getFullYear() && m.month === date.getMonth());
+            if (target === -1) return null;
+            return target + 1;
+        };
+
+        const bars = phases.map(phase => {
+            const startIndex = monthLookup(phase.plan_start) ?? monthLookup(phase.actual_start);
+            const endIndex = monthLookup(phase.plan_end) ?? monthLookup(phase.actual_end) ?? startIndex;
+            if (!startIndex || !endIndex) return '';
+            const spanEnd = endIndex + 1;
+            const originClass = phase.origin === 'manual' ? 'manual' : 'auto';
+            return `<div class="summary-bar ${originClass}" style="grid-column: ${startIndex} / ${spanEnd}; background:${color};"></div>`;
+        }).join('');
+
+        const phaseList = phases.map(phase => {
+            const originBadge = phase.origin === 'manual' ? '<span class="phase-badge">手動</span>' : '';
+            return `<li>${phase.title} ${originBadge}</li>`;
+        }).join('');
+
+        return `
+            <div class="summary-grid summary-row" style="grid-template-columns: 220px 200px repeat(${months.length}, 1fr);">
+                <div class="summary-cell summary-project">
+                    <span class="project-index" style="border-color:${color}; color:${color};">${displayIndex}</span>
+                    <div class="project-info">
+                        <div class="project-name">${project.project_name || '未設定'}</div>
+                        <div class="project-company">${project.company_name || '-'}</div>
+                    </div>
+                </div>
+                <div class="summary-cell summary-phases">
+                    <ul>${phaseList}</ul>
+                </div>
+                <div class="summary-cell summary-timeline">
+                    <div class="timeline-grid" style="grid-template-columns: repeat(${months.length}, 1fr);">
+                        ${months.map(() => '<div class="timeline-cell"></div>').join('')}
+                        ${bars}
+                    </div>
+                </div>
+            </div>
+        `;
     }
 })();
 

@@ -1152,6 +1152,7 @@ def serialize_gantt_task(task: dict):
         'project_id': task.get('project_id'),
         'project_name': task.get('project_name'),
         'company_name': task.get('company_name'),
+        'auto_stage': task.get('auto_stage'),
         'assignee': task.get('assignee'),
         'status': task.get('status'),
         'priority': task.get('priority'),
@@ -1243,6 +1244,79 @@ def collect_task_filters(tasks: list):
         'statuses': statuses,
         'projects': [{'id': pid, 'name': pname} for pid, pname in projects]
     }
+
+
+def summarize_projects_for_gantt(tasks: list[dict]) -> list[dict]:
+    summary = {}
+
+    def normalize_date(value):
+        if not value:
+            return None
+        try:
+            return datetime.strptime(value, '%Y-%m-%d')
+        except ValueError:
+            return None
+
+    for task in tasks:
+        project_id = task.get('project_id')
+        if not project_id:
+            continue
+        key = project_id
+        entry = summary.setdefault(
+            key,
+            {
+                'project_id': project_id,
+                'project_name': task.get('project_name'),
+                'company_name': task.get('company_name'),
+                'color': task.get('color'),
+                'phases': [],
+                'range': {'plan_start': None, 'plan_end': None}
+            }
+        )
+        entry['project_name'] = entry['project_name'] or task.get('project_name')
+        entry['company_name'] = entry['company_name'] or task.get('company_name')
+        if task.get('color'):
+            entry['color'] = task['color']
+
+        plan_start = task.get('plan_start') or task.get('due_date')
+        plan_end = task.get('plan_end') or task.get('due_date')
+        actual_start = task.get('actual_start')
+        actual_end = task.get('actual_end')
+
+        entry['phases'].append({
+            'title': task.get('title'),
+            'status': task.get('status'),
+            'plan_start': plan_start,
+            'plan_end': plan_end,
+            'actual_start': actual_start,
+            'actual_end': actual_end,
+            'origin': task.get('task_origin', 'manual'),
+            'auto_stage': task.get('auto_stage'),
+            'order_index': task.get('order_index')
+        })
+
+        start_dt = normalize_date(plan_start) or normalize_date(actual_start)
+        end_dt = normalize_date(plan_end) or normalize_date(actual_end) or start_dt
+        if start_dt:
+            current_start = entry['range']['plan_start']
+            if current_start is None or start_dt < current_start:
+                entry['range']['plan_start'] = start_dt
+        if end_dt:
+            current_end = entry['range']['plan_end']
+            if current_end is None or end_dt > current_end:
+                entry['range']['plan_end'] = end_dt
+
+    result = []
+    for project_id, entry in summary.items():
+        entry['phases'].sort(key=lambda phase: (phase.get('order_index') or 9999, phase.get('plan_start') or ''))
+        if entry['range']['plan_start'] is not None:
+            entry['range']['plan_start'] = entry['range']['plan_start'].strftime('%Y-%m-%d')
+        if entry['range']['plan_end'] is not None:
+            entry['range']['plan_end'] = entry['range']['plan_end'].strftime('%Y-%m-%d')
+        result.append(entry)
+
+    result.sort(key=lambda item: (item.get('company_name') or '', item.get('project_name') or ''))
+    return result
 
 
 # 全案件をフラット化（全社統合ビュー用）
@@ -2097,6 +2171,8 @@ def api_gantt_tasks():
         for entry in all_tasks_payload:
             entry.pop('history', None)
 
+    project_summary = summarize_projects_for_gantt(user_tasks)
+
     return jsonify({
         'status': 'success',
         'data': [serialize(task) for task in filtered_tasks],
@@ -2104,7 +2180,8 @@ def api_gantt_tasks():
             'filters': filters,
             'view': request.args.get('view', 'plan'),
             'total': len(filtered_tasks),
-            'all_tasks': all_tasks_payload
+            'all_tasks': all_tasks_payload,
+            'projects_summary': project_summary
         }
     })
 
