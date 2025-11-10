@@ -17,6 +17,7 @@ body {
 .app-container {
     display: flex;
     min-height: 100vh;
+    background: #eef3ff;
 }
 
 /* 左サイドバー */
@@ -414,9 +415,14 @@ body {
 /* メインコンテンツエリア */
 .main-content {
     flex: 1;
-    margin-left: 250px;
-    background: #fff;
+    margin-left: 280px;
     min-height: 100vh;
+    padding: 36px 44px 48px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(245, 250, 255, 0.95) 100%);
+}
+
+.main-content > *:first-child {
+    margin-top: 0;
 }
 
 .content-wrapper {
@@ -2096,6 +2102,7 @@ section h3 {
     
     .main-content {
         margin-left: 0;
+        padding: 24px 20px 32px;
     }
     
     .stats-grid {
