@@ -1084,9 +1084,6 @@ def initialize_all_project_tasks():
     rebuild_task_cache()
 
 
-initialize_all_project_tasks()
-
-
 def next_task_id():
     return next(TASK_ID_COUNTER)
 
@@ -3178,6 +3175,10 @@ def download_finance_report():
         as_attachment=True,
         download_name=filename
     )
+
+
+# ===== 初期化フック =====
+initialize_all_project_tasks()
 
 @app.route('/settings')
 @login_required
