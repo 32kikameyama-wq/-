@@ -3965,6 +3965,83 @@ section h3 {
     gap: 6px;
 }
 
+.summary-phases li.phase-empty {
+    color: #94a3b8;
+    font-style: italic;
+}
+
+.summary-status-month {
+    align-items: flex-start;
+    padding: 8px 6px;
+}
+
+.status-day-grid {
+    display: grid;
+    width: 100%;
+    gap: 1px;
+    grid-auto-rows: 12px;
+}
+
+.status-day {
+    display: block;
+    height: 12px;
+    border-radius: 2px;
+    background: #94a3b8;
+}
+
+.status-day--empty {
+    background: #e2e8f0;
+    opacity: 0.6;
+}
+
+.status-day--muted {
+    opacity: 0.3;
+}
+
+.status-day--change {
+    box-shadow: 0 0 0 1px rgba(30, 41, 59, 0.55);
+}
+
+.status-day-grid .status-day[title] {
+    cursor: help;
+}
+
+.status-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    font-size: 0.82em;
+    color: #2a3b55;
+}
+
+.status-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.status-legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    border: 1px solid rgba(30, 41, 59, 0.3);
+}
+
+.status-legend-swatch--empty {
+    background: #e2e8f0;
+}
+
+.status-legend-change {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    border: 1px solid rgba(37, 47, 63, 0.6);
+    background: #fff;
+    box-shadow: inset 0 0 0 2px rgba(79, 70, 229, 0.5);
+}
+
 .phase-badge {
     display: inline-block;
     padding: 2px 6px;
@@ -3987,6 +4064,143 @@ section h3 {
     background: rgba(99, 102, 241, 0.12);
     color: #3730a3;
     border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.gantt-status-sheet {
+    margin-top: 28px;
+    padding: 20px 24px;
+    border: 1px solid #d0d7e2;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+}
+
+.status-sheet-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.status-sheet-title {
+    margin: 0;
+    font-size: 1.12em;
+    color: #1f3a5f;
+}
+
+.status-sheet-note {
+    margin: 6px 0 0;
+    font-size: 0.85em;
+    color: #51627a;
+}
+
+.status-sheet-table-wrapper {
+    border: 1px solid #d8e2f2;
+    border-radius: 12px;
+    background: #fff;
+    overflow: auto;
+    max-height: 420px;
+}
+
+.status-sheet-table {
+    width: 100%;
+    min-width: 760px;
+    border-collapse: collapse;
+}
+
+.status-sheet-table th,
+.status-sheet-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 0.85em;
+    color: #2a3b55;
+    text-align: left;
+}
+
+.status-sheet-table th {
+    position: sticky;
+    top: 0;
+    background: #f1f5f9;
+    z-index: 2;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.status-sheet-table tbody tr:nth-child(even) {
+    background: #f8fafc;
+}
+
+.status-sheet-row--change {
+    background: rgba(99, 102, 241, 0.14);
+}
+
+.status-sheet-weekday {
+    color: #64748b;
+    font-weight: 600;
+    width: 48px;
+}
+
+.status-sheet-flag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(129, 140, 248, 0.18);
+    color: #3730a3;
+    font-size: 0.75em;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.status-sheet-color {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    border: 1px solid rgba(15, 23, 42, 0.3);
+    vertical-align: middle;
+}
+
+.status-sheet-status {
+    --status-color: #2563eb;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 0.78em;
+    font-weight: 600;
+    border: 1px solid rgba(37, 56, 88, 0.18);
+    background: rgba(99, 102, 241, 0.12);
+    color: #1f2937;
+}
+
+.status-sheet-status::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--status-color, #2563eb);
+    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.12);
+}
+
+.status-sheet-status--empty {
+    background: #e2e8f0;
+    border-color: #cbd5f5;
+    color: #475569;
+}
+
+.status-sheet-status--empty::before {
+    background: #94a3b8;
+}
+
+.status-sheet-empty {
+    padding: 32px;
+    text-align: center;
+    color: #5e718d;
+    font-size: 0.9em;
 }
 
 .summary-timeline {

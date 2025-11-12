@@ -8,7 +8,8 @@ from flask import (
     session,
     g,
     abort,
-    send_from_directory
+    send_from_directory,
+    send_file
 )
 from flask_cors import CORS
 import os
@@ -27,6 +28,17 @@ from sqlalchemy import create_engine, text
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from werkzeug.utils import secure_filename
 from uuid import uuid4
+from io import BytesIO
+
+try:
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
 
 load_dotenv()
 
@@ -116,6 +128,10 @@ VIDEO_ITEM_ID_COUNTER = count(1)
 COMMENT_ID_COUNTER = count(1)
 PROJECT_VIDEO_ITEMS = {}
 PROJECT_COMMENTS = {}
+PROJECT_STATUS_HISTORY = {}
+
+MAX_PROJECT_STATUS_TIMELINE_DAYS = 180
+STATUS_HISTORY_DEFAULT_ACTOR = 'システム'
 
 FINANCE_INVOICE_STATUS_DEFINITIONS = [
     ('draft', '下書き'),
@@ -152,6 +168,9 @@ FINANCE_PAYOUTS = [
 
 FINANCE_INVOICE_ID_COUNTER = count(start=len(FINANCE_INVOICES) + 1)
 FINANCE_PAYOUT_ID_COUNTER = count(start=len(FINANCE_PAYOUTS) + 1)
+
+REPORT_PDF_FONT_NAME = 'HeiseiKakuGo-W5'
+REPORT_PDF_FONT_REGISTERED = False
 
 
 EDITOR_SHARED_SETTINGS = {}
@@ -978,6 +997,7 @@ def initialize_project_gantt_tasks(project: dict, company_name: str, company_id:
     project.setdefault('company_id', company_id)
     project.setdefault('company_name', company_name)
     project_color = ensure_project_color(company_id, project)
+    ensure_project_status_history(project)
     project_tasks = PROJECT_GANTT_TASKS.setdefault(project_id, [])
     existing_auto = {task.get('auto_stage'): task for task in project_tasks if task.get('task_origin') == 'auto'}
     generated = build_auto_gantt_tasks(project, company_name, project_color)
@@ -1188,6 +1208,187 @@ def update_task_metadata(task: dict, actor: str):
     task['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M')
 
 
+def parse_datetime_safe(value):
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        candidates = [
+            '%Y-%m-%d %H:%M:%S',
+            '%Y-%m-%d %H:%M',
+            '%Y-%m-%d'
+        ]
+        for fmt in candidates:
+            try:
+                return datetime.strptime(value, fmt)
+            except ValueError:
+                continue
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def record_project_status_change(project_id: int, new_status: str, actor: str = None, changed_at=None):
+    if not new_status:
+        return
+    actor = actor or STATUS_HISTORY_DEFAULT_ACTOR
+    history = PROJECT_STATUS_HISTORY.setdefault(project_id, [])
+
+    if isinstance(changed_at, datetime):
+        timestamp_dt = changed_at
+    elif isinstance(changed_at, str):
+        timestamp_dt = parse_datetime_safe(changed_at) or datetime.now()
+    else:
+        timestamp_dt = datetime.now()
+    timestamp_str = timestamp_dt.strftime('%Y-%m-%d %H:%M')
+
+    last_entry = history[-1] if history else None
+    if last_entry and last_entry.get('status') == new_status:
+        # 既存ステータスと同じ場合はタイムスタンプのみ更新
+        last_entry['changed_at'] = timestamp_str
+        last_entry['changed_by'] = actor
+        return
+
+    entry = {
+        'status': new_status,
+        'changed_at': timestamp_str,
+        'changed_by': actor
+    }
+    history.append(entry)
+    # 履歴を最新順に保つ（古いものから最大100件残す）
+    if len(history) > 100:
+        del history[:-100]
+
+
+def ensure_project_status_history(project: dict, actor: str = STATUS_HISTORY_DEFAULT_ACTOR):
+    project_id = project.get('id')
+    if project_id is None:
+        return []
+    if PROJECT_STATUS_HISTORY.get(project_id):
+        return PROJECT_STATUS_HISTORY[project_id]
+
+    seed_timestamp = (
+        project.get('created_at')
+        or project.get('delivery_date')
+        or project.get('due_date')
+        or datetime.now()
+    )
+    seed_dt = parse_datetime_safe(seed_timestamp) or datetime.now()
+    initial_status = project.get('status') or '進行中'
+    record_project_status_change(project_id, initial_status, actor=actor, changed_at=seed_dt)
+    return PROJECT_STATUS_HISTORY[project_id]
+
+
+def get_project_status_history(project_id: int):
+    history = PROJECT_STATUS_HISTORY.get(project_id, [])
+    return [
+        {
+            'status': entry.get('status'),
+            'changed_at': entry.get('changed_at'),
+            'changed_by': entry.get('changed_by') or STATUS_HISTORY_DEFAULT_ACTOR
+        }
+        for entry in history
+    ]
+
+
+def build_project_status_timeline(project: dict):
+    project_id = project.get('id')
+    if project_id is None:
+        return {'segments': [], 'days': [], 'start': None, 'end': None, 'history': []}
+
+    history_entries = PROJECT_STATUS_HISTORY.get(project_id)
+    if not history_entries:
+        history_entries = ensure_project_status_history(project)
+
+    events = []
+    for entry in history_entries:
+        dt = parse_datetime_safe(entry.get('changed_at')) or datetime.now()
+        events.append({
+            'status': entry.get('status'),
+            'changed_at': dt,
+            'changed_by': entry.get('changed_by') or STATUS_HISTORY_DEFAULT_ACTOR
+        })
+
+    if not events:
+        now_dt = datetime.now()
+        events.append({
+            'status': project.get('status', '進行中'),
+            'changed_at': now_dt,
+            'changed_by': STATUS_HISTORY_DEFAULT_ACTOR
+        })
+
+    events.sort(key=lambda item: item['changed_at'])
+
+    start_dt = events[0]['changed_at']
+    end_candidates = [
+        events[-1]['changed_at'],
+        parse_datetime_safe(project.get('delivery_date')),
+        parse_datetime_safe(project.get('due_date')),
+        datetime.now()
+    ]
+    end_candidates = [dt for dt in end_candidates if dt is not None]
+    end_dt = max(end_candidates) if end_candidates else datetime.now()
+
+    max_span = timedelta(days=MAX_PROJECT_STATUS_TIMELINE_DAYS)
+    if end_dt - start_dt > max_span:
+        end_dt = start_dt + max_span
+
+    segments = []
+    for idx, event in enumerate(events):
+        seg_start_dt = event['changed_at'].date()
+        if idx + 1 < len(events):
+            next_dt = events[idx + 1]['changed_at'].date() - timedelta(days=1)
+        else:
+            next_dt = end_dt.date()
+        if next_dt < seg_start_dt:
+            next_dt = seg_start_dt
+
+        segments.append({
+            'status': event['status'],
+            'start_date': seg_start_dt.strftime('%Y-%m-%d'),
+            'end_date': next_dt.strftime('%Y-%m-%d'),
+            'changed_at': event['changed_at'].strftime('%Y-%m-%d %H:%M'),
+            'changed_by': event.get('changed_by') or STATUS_HISTORY_DEFAULT_ACTOR
+        })
+
+    days = []
+    for segment in segments:
+        seg_start = parse_datetime_safe(segment['start_date'])
+        seg_end = parse_datetime_safe(segment['end_date'])
+        if not seg_start or not seg_end:
+            continue
+        current = seg_start
+        while current <= seg_end:
+            days.append({
+                'date': current.strftime('%Y-%m-%d'),
+                'status': segment['status'],
+                'is_change': current == seg_start,
+                'changed_by': segment.get('changed_by'),
+                'changed_at': segment.get('changed_at')
+            })
+            current += timedelta(days=1)
+
+    history_payload = [
+        {
+            'status': event['status'],
+            'changed_at': event['changed_at'].strftime('%Y-%m-%d %H:%M'),
+            'changed_by': event.get('changed_by') or STATUS_HISTORY_DEFAULT_ACTOR
+        }
+        for event in events
+    ]
+
+    return {
+        'segments': segments,
+        'days': days,
+        'start': segments[0]['start_date'] if segments else None,
+        'end': segments[-1]['end_date'] if segments else None,
+        'history': history_payload
+    }
+
+
 def serialize_gantt_task(task: dict):
     dependencies = task.get('dependencies', [])
     dependencies_string = ",".join(str(dep.get('task_id')) for dep in dependencies if dep.get('task_id'))
@@ -1319,7 +1520,7 @@ def summarize_projects_for_gantt() -> list[dict]:
                 'company_name': company['name'],
                 'color': color,
                 'phases': [],
-                'range': {'plan_start': None, 'plan_end': None}
+                'range': {'plan_start': None, 'plan_end': None, 'timeline_start': None, 'timeline_end': None}
             }
 
             for index, task in enumerate(sorted(combined, key=lambda t: (t.get('order_index') or (index + 1), t.get('plan_start') or ''))):
@@ -1356,10 +1557,33 @@ def summarize_projects_for_gantt() -> list[dict]:
                     if current_end is None or end_dt > current_end:
                         entry['range']['plan_end'] = end_dt
 
+            timeline_info = build_project_status_timeline(project)
+            entry['status_timeline'] = timeline_info['segments']
+            entry['status_days'] = timeline_info['days']
+            entry['status_history'] = timeline_info['history']
+
+            timeline_start_dt = normalize_date(timeline_info['start'])
+            timeline_end_dt = normalize_date(timeline_info['end'])
+
+            if timeline_start_dt:
+                entry['range']['timeline_start'] = timeline_start_dt
+                current_start = entry['range']['plan_start']
+                if current_start is None or timeline_start_dt < current_start:
+                    entry['range']['plan_start'] = timeline_start_dt
+            if timeline_end_dt:
+                entry['range']['timeline_end'] = timeline_end_dt
+                current_end = entry['range']['plan_end']
+                if current_end is None or timeline_end_dt > current_end:
+                    entry['range']['plan_end'] = timeline_end_dt
+
             if entry['range']['plan_start'] is not None:
                 entry['range']['plan_start'] = entry['range']['plan_start'].strftime('%Y-%m-%d')
             if entry['range']['plan_end'] is not None:
                 entry['range']['plan_end'] = entry['range']['plan_end'].strftime('%Y-%m-%d')
+            if entry['range']['timeline_start'] is not None:
+                entry['range']['timeline_start'] = entry['range']['timeline_start'].strftime('%Y-%m-%d')
+            if entry['range']['timeline_end'] is not None:
+                entry['range']['timeline_end'] = entry['range']['timeline_end'].strftime('%Y-%m-%d')
 
             summary.append(entry)
 
@@ -1736,6 +1960,19 @@ def api_project_detail(project_id):
         'data': project
     })
 
+
+@app.route('/api/projects/<int:project_id>/status-history')
+@login_required
+def api_project_status_history(project_id):
+    project, _ = find_project_by_id(project_id)
+    if not project:
+        return jsonify({'status': 'error', 'message': '案件が見つかりません'}), 404
+    history = get_project_status_history(project_id)
+    return jsonify({
+        'status': 'success',
+        'data': history
+    })
+
 @app.route('/api/projects/<int:project_id>', methods=['PUT'])
 def api_update_project(project_id):
     """案件更新API"""
@@ -1763,6 +2000,8 @@ def api_update_project(project_id):
     # 案件名を更新する前に古い案件名を保存（タスクの案件名も更新するため）
     old_project_name = project.get('name')
     new_project_name = data.get('name', project.get('name'))
+    actor = g.current_user['name'] if g.current_user and g.current_user.get('name') else STATUS_HISTORY_DEFAULT_ACTOR
+    previous_status = project.get('status')
     
     # 案件を更新
     project['name'] = new_project_name
@@ -1805,6 +2044,9 @@ def api_update_project(project_id):
     global SAMPLE_PROJECTS, PROJECT_NAME_TO_ID
     SAMPLE_PROJECTS = get_all_projects()
     PROJECT_NAME_TO_ID = {proj['name']: proj['id'] for proj in SAMPLE_PROJECTS}
+
+    if previous_status != project.get('status'):
+        record_project_status_change(project_id, project.get('status'), actor=actor)
     
     return jsonify({
         'status': 'success',
@@ -1859,6 +2101,8 @@ def api_create_project():
     # ここではサンプルデータに追加
     new_project['company_id'] = company_id
     company['projects'].append(new_project)
+    actor = g.current_user['name'] if g.current_user and g.current_user.get('name') else STATUS_HISTORY_DEFAULT_ACTOR
+    record_project_status_change(new_project['id'], new_project.get('status', '進行中'), actor=actor)
     initialize_project_gantt_tasks(new_project, company['name'], company_id)
     rebuild_task_cache()
     global SAMPLE_PROJECTS, PROJECT_NAME_TO_ID
@@ -1876,6 +2120,7 @@ def api_toggle_delivered(project_id):
     """CLチェックボックスの切り替えAPI"""
     data = request.get_json()
     delivered = data.get('delivered', False)
+    actor = g.current_user['name'] if g.current_user and g.current_user.get('name') else STATUS_HISTORY_DEFAULT_ACTOR
     
     # 案件を検索
     project = None
@@ -1895,6 +2140,7 @@ def api_toggle_delivered(project_id):
     
     # 納品済み状態を更新
     project['delivered'] = delivered
+    previous_status = project.get('status')
     
     # 納品済みの場合、納品完了日を設定（24時切り替えで正確に日付を判定）
     if delivered:
@@ -1914,6 +2160,11 @@ def api_toggle_delivered(project_id):
         project['status'] = '完了'
     elif not delivered:
         project['delivery_date'] = ''
+    
+    status_changed = previous_status != project.get('status')
+    if status_changed:
+        changed_at = datetime.now(pytz.timezone('Asia/Tokyo')).strftime('%Y-%m-%d %H:%M') if delivered else datetime.now().strftime('%Y-%m-%d %H:%M')
+        record_project_status_change(project_id, project.get('status'), actor=actor, changed_at=changed_at)
 
     if company:
         initialize_project_gantt_tasks(project, company['name'], company['id'])
@@ -2518,6 +2769,169 @@ def calculate_finance_summary():
     }
 
 
+def ensure_reportlab_font():
+    global REPORT_PDF_FONT_REGISTERED
+    if not REPORTLAB_AVAILABLE or REPORT_PDF_FONT_REGISTERED:
+        return
+    pdfmetrics.registerFont(UnicodeCIDFont(REPORT_PDF_FONT_NAME))
+    REPORT_PDF_FONT_REGISTERED = True
+
+
+def gather_finance_report_data():
+    summary = calculate_finance_summary()
+    invoices = [serialize_invoice(invoice) for invoice in FINANCE_INVOICES]
+    payouts = [serialize_payout(payout) for payout in FINANCE_PAYOUTS]
+
+    invoice_by_status = {}
+    for invoice in invoices:
+        invoice_by_status.setdefault(invoice['status_label'], {
+            'count': 0,
+            'total': 0
+        })
+        invoice_by_status[invoice['status_label']]['count'] += 1
+        invoice_by_status[invoice['status_label']]['total'] += invoice['amount']
+
+    payout_by_status = {}
+    for payout in payouts:
+        payout_by_status.setdefault(payout['status_label'], {
+            'count': 0,
+            'total': 0
+        })
+        payout_by_status[payout['status_label']]['count'] += 1
+        payout_by_status[payout['status_label']]['total'] += payout['amount']
+
+    companies_summary = []
+    for company in SAMPLE_COMPANIES:
+        projects = company.get('projects', [])
+        completed = len([p for p in projects if p.get('status') == '完了' or p.get('delivered')])
+        in_progress = len([p for p in projects if p.get('status') in {'進行中', 'レビュー中'}])
+        companies_summary.append({
+            'name': company['name'],
+            'project_count': len(projects),
+            'completed_count': completed,
+            'in_progress_count': in_progress
+        })
+
+    return {
+        'summary': summary,
+        'invoices': invoices,
+        'payouts': payouts,
+        'invoice_by_status': invoice_by_status,
+        'payout_by_status': payout_by_status,
+        'companies_summary': companies_summary
+    }
+
+
+def format_currency(value: int | float | None) -> str:
+    if value is None:
+        return '¥0'
+    return f"¥{int(value):,}"
+
+
+def build_finance_report_pdf(report_data, generated_by: str | None = None) -> BytesIO:
+    ensure_reportlab_font()
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    margin_x = 20 * mm
+    margin_y = 20 * mm
+    line_height = 7 * mm
+
+    def draw_heading(text, size=16, offset=0):
+        nonlocal current_y
+        c.setFont(REPORT_PDF_FONT_NAME, size)
+        c.drawString(margin_x, current_y + offset, text)
+
+    def draw_body(text, size=11):
+        nonlocal current_y
+        if current_y < margin_y:
+            c.showPage()
+            current_y = height - margin_y
+            c.setFont(REPORT_PDF_FONT_NAME, 11)
+        c.setFont(REPORT_PDF_FONT_NAME, size)
+        c.drawString(margin_x, current_y, text)
+        current_y -= line_height
+
+    current_y = height - margin_y
+
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+    draw_heading("案件管理システム 収支レポート", size=18)
+    current_y -= line_height
+    draw_body(f"作成日時: {timestamp}")
+    if generated_by:
+        draw_body(f"作成者: {generated_by}")
+    current_y -= line_height / 2
+
+    summary = report_data['summary']
+    draw_heading("サマリ", size=14)
+    current_y -= line_height
+    draw_body(f"総売上: {format_currency(summary['total_revenue'])}")
+    draw_body(f"総コスト: {format_currency(summary['total_cost'])}")
+    draw_body(f"粗利: {format_currency(summary['profit'])}")
+    draw_body(f"粗利率: {summary['profit_rate']}%")
+
+    current_y -= line_height / 2
+    draw_heading("請求ステータス別集計", size=14)
+    current_y -= line_height
+    invoice_stats = report_data['invoice_by_status']
+    if invoice_stats:
+        for label, stats in invoice_stats.items():
+            draw_body(f"{label}: 件数 {stats['count']}件 / 金額 {format_currency(stats['total'])}")
+    else:
+        draw_body("データがありません。")
+
+    current_y -= line_height / 2
+    draw_heading("支払ステータス別集計", size=14)
+    current_y -= line_height
+    payout_stats = report_data['payout_by_status']
+    if payout_stats:
+        for label, stats in payout_stats.items():
+            draw_body(f"{label}: 件数 {stats['count']}件 / 金額 {format_currency(stats['total'])}")
+    else:
+        draw_body("データがありません。")
+
+    current_y -= line_height / 2
+    draw_heading("会社別案件サマリ", size=14)
+    current_y -= line_height
+    companies = report_data['companies_summary']
+    if companies:
+        for company in companies:
+            draw_body(
+                f"{company['name']}: 案件数 {company['project_count']}件 / 進行中 {company['in_progress_count']}件 / 完了 {company['completed_count']}件"
+            )
+    else:
+        draw_body("データがありません。")
+
+    current_y -= line_height / 2
+    draw_heading("最新請求一覧 (最大10件)", size=14)
+    current_y -= line_height
+    invoices = report_data['invoices'][:10]
+    if invoices:
+        for invoice in invoices:
+            draw_body(
+                f"{invoice['project_name']} | {format_currency(invoice['amount'])} | 発行日: {invoice['issue_date'] or '---'} | 状態: {invoice['status_label']}"
+            )
+    else:
+        draw_body("データがありません。")
+
+    current_y -= line_height / 2
+    draw_heading("最新支払一覧 (最大10件)", size=14)
+    current_y -= line_height
+    payouts = report_data['payouts'][:10]
+    if payouts:
+        for payout in payouts:
+            draw_body(
+                f"{payout['editor']} / {payout['project_name']} | {format_currency(payout['amount'])} | 状態: {payout['status_label']}"
+            )
+    else:
+        draw_body("データがありません。")
+
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer
+
+
 def normalize_amount(value, field_label: str) -> int:
     if value is None:
         raise ValueError(f'{field_label}は必須です')
@@ -2741,6 +3155,29 @@ def api_update_payout(payout_id):
 def reports():
     """レポート"""
     return render_template('reports.html')
+
+
+@app.route('/reports/download/finance')
+@login_required
+@role_required('admin')
+def download_finance_report():
+    if not REPORTLAB_AVAILABLE:
+        return jsonify({
+            'status': 'error',
+            'message': 'PDF生成ライブラリが利用できません。requirements.txt から reportlab をインストールしてください。'
+        }), 503
+
+    report_data = gather_finance_report_data()
+    current_user = g.current_user
+    generated_by = current_user['name'] if current_user and current_user.get('name') else None
+    pdf_buffer = build_finance_report_pdf(report_data, generated_by=generated_by)
+    filename = f"finance_report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+    return send_file(
+        pdf_buffer,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=filename
+    )
 
 @app.route('/settings')
 @login_required

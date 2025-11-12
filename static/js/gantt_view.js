@@ -31,6 +31,8 @@
         '納品待ち': '#f97316',
         '完了済': '#0ea5e9'
     };
+    const STATUS_EMPTY_COLOR = '#e2e8f0';
+    const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 
     const FIELD_LABELS = {
         title: 'タスク名',
@@ -50,6 +52,16 @@
         project_name: '案件',
         dependencies: '依存関係'
     };
+
+    function escapeHtml(value) {
+        if (value == null) return '';
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
 
     const refs = {};
 
@@ -106,6 +118,11 @@
         refs.dependencyList = document.getElementById('gantt-dependency-list');
         refs.moveUp = document.getElementById('gantt-move-up');
         refs.moveDown = document.getElementById('gantt-move-down');
+        refs.statusSheet = document.getElementById('gantt-status-sheet');
+        refs.statusSheetNote = document.getElementById('status-sheet-note');
+        if (refs.statusSheetNote && !refs.statusSheetNote.dataset.defaultText) {
+            refs.statusSheetNote.dataset.defaultText = refs.statusSheetNote.textContent || '';
+        }
 
         refs.detailFields = {
             title: document.getElementById('gantt-task-title'),
@@ -804,6 +821,27 @@
         if (refs.moveDown) refs.moveDown.disabled = index === -1 || index >= sorted.length - 1;
     }
 
+    function parseISODate(value) {
+        if (!value) return null;
+        if (value instanceof Date) return value;
+        const parts = String(value).split('-').map(Number);
+        if (parts.length < 2 || Number.isNaN(parts[0]) || Number.isNaN(parts[1])) {
+            return null;
+        }
+        const year = parts[0];
+        const month = (parts[1] || 1) - 1;
+        const day = parts.length >= 3 && !Number.isNaN(parts[2]) ? parts[2] : 1;
+        const date = new Date(year, month, day);
+        if (Number.isNaN(date.getTime())) {
+            return null;
+        }
+        return date;
+    }
+
+    function getDaysInMonth(year, month) {
+        return new Date(year, month + 1, 0).getDate();
+    }
+
     function formatDate(date) {
         if (!date) return '';
         const d = (date instanceof Date) ? date : new Date(date);
@@ -833,13 +871,29 @@
     function renderProjectSummary() {
         if (!refs.summaryContainer) return;
         const projects = state.projectSummary || [];
-        if (!projects.length) {
+        const selectedProjectId = state.filters.project_id;
+        let filteredProjects = projects;
+        if (selectedProjectId) {
+            filteredProjects = projects.filter(project => String(project.project_id) === String(selectedProjectId));
+        }
+
+        if (!filteredProjects.length) {
             refs.summaryContainer.innerHTML = '<div class="gantt-summary-empty">表示できる案件がありません。フィルタ条件を変更してください。</div>';
+            renderStatusSheet(filteredProjects);
             return;
         }
 
-        const months = buildSummaryMonths(projects);
+        const startFilterDate = parseISODate(state.filters.start_date);
+        const endFilterDate = parseISODate(state.filters.end_date);
+        const months = buildSummaryMonths(filteredProjects, startFilterDate, endFilterDate);
+        if (!months.length) {
+            refs.summaryContainer.innerHTML = '<div class="gantt-summary-empty">期間に一致する案件がありません。期間フィルタを調整してください。</div>';
+            renderStatusSheet(filteredProjects, { startDate: startFilterDate, endDate: endFilterDate });
+            return;
+        }
+
         const quarters = buildQuarterSpans(months);
+        const legend = buildStatusLegend(filteredProjects);
         const header = `
             <div class="summary-grid summary-header" style="grid-template-columns: 220px 200px repeat(${months.length}, 1fr);">
                 <div class="summary-cell summary-cell--head">案件 / 会社</div>
@@ -853,43 +907,83 @@
                 ${quarters.map(q => `<div class="summary-cell summary-cell--quarter" style="grid-column: span ${q.span};">${q.label}</div>`).join('')}
             </div>
         `;
-        const rows = projects.map((project, index) => createSummaryRow(project, index + 1, months)).join('');
-        refs.summaryContainer.innerHTML = quarterRow + header + rows;
+        const rows = filteredProjects.map((project, index) => createSummaryRow(project, index + 1, months, {
+            startKey: startFilterDate ? formatDate(startFilterDate) : '',
+            endKey: endFilterDate ? formatDate(endFilterDate) : ''
+        })).join('');
+        refs.summaryContainer.innerHTML = `${legend}${quarterRow}${header}${rows}`;
+        renderStatusSheet(filteredProjects, { startDate: startFilterDate, endDate: endFilterDate });
     }
 
-    function buildSummaryMonths(projects) {
+    function buildSummaryMonths(projects, startFilter, endFilter) {
         let minDate = null;
         let maxDate = null;
+
         projects.forEach(project => {
-            const start = project.range?.plan_start;
-            const end = project.range?.plan_end;
-            const startDate = start ? new Date(start) : null;
-            const endDate = end ? new Date(end) : null;
-            if (startDate && (!minDate || startDate < minDate)) minDate = startDate;
-            if (endDate && (!maxDate || endDate > maxDate)) maxDate = endDate;
+            const candidates = [
+                parseISODate(project.range?.plan_start),
+                parseISODate(project.range?.plan_end),
+                parseISODate(project.range?.timeline_start),
+                parseISODate(project.range?.timeline_end)
+            ];
+
+            (project.status_days || []).forEach(day => {
+                const dt = parseISODate(day.date);
+                if (dt) {
+                    candidates.push(dt);
+                }
+            });
+
+            candidates.forEach(date => {
+                if (!date) return;
+                const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+                if (!minDate || monthStart < minDate) {
+                    minDate = monthStart;
+                }
+                if (!maxDate || monthStart > maxDate) {
+                    maxDate = monthStart;
+                }
+            });
         });
 
         if (!minDate || !maxDate) {
             const today = new Date();
             minDate = new Date(today.getFullYear(), today.getMonth(), 1);
-            maxDate = new Date(today.getFullYear(), today.getMonth() + 5, 1);
+            maxDate = new Date(today.getFullYear(), today.getMonth(), 1);
         }
 
-        const months = [];
-        const cursor = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+        const startCursor = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
         const endCursor = new Date(maxDate.getFullYear(), maxDate.getMonth(), 1);
+        endCursor.setMonth(endCursor.getMonth() + 1);
 
+        const months = [];
+        const cursor = new Date(startCursor);
         while (cursor <= endCursor) {
+            const year = cursor.getFullYear();
+            const month = cursor.getMonth();
             months.push({
-                year: cursor.getFullYear(),
-                month: cursor.getMonth(),
-                label: `${cursor.getFullYear()}年${cursor.getMonth() + 1}月`,
+                year,
+                month,
+                daysInMonth: getDaysInMonth(year, month),
+                label: `${year}年${month + 1}月`,
                 index: months.length + 1
             });
             cursor.setMonth(cursor.getMonth() + 1);
         }
 
-        return months;
+        const filteredMonths = months.filter(month => {
+            const monthStart = new Date(month.year, month.month, 1);
+            const monthEnd = new Date(month.year, month.month, month.daysInMonth);
+            if (startFilter && monthEnd < startFilter) return false;
+            if (endFilter && monthStart > endFilter) return false;
+            return true;
+        });
+
+        if (!filteredMonths.length && months.length) {
+            return months;
+        }
+
+        return filteredMonths;
     }
 
     function buildQuarterSpans(months) {
@@ -910,40 +1004,68 @@
         return quarters;
     }
 
-    function createSummaryRow(project, displayIndex, months) {
+    function buildStatusLegend(projects) {
+        const statusColorMap = new Map();
+        projects.forEach(project => {
+            (project.status_timeline || []).forEach(segment => {
+                if (!segment.status) return;
+                if (!statusColorMap.has(segment.status)) {
+                    statusColorMap.set(segment.status, STATUS_COLOR_MAP[segment.status] || project.color || '#64748b');
+                }
+            });
+        });
+
+        const items = [];
+        statusColorMap.forEach((color, status) => {
+            items.push(`<span class="status-legend-item"><span class="status-legend-swatch" style="background:${color};"></span>${status}</span>`);
+        });
+
+        items.push(`<span class="status-legend-item"><span class="status-legend-swatch status-legend-swatch--empty"></span>履歴なし</span>`);
+        items.push(`<span class="status-legend-item"><span class="status-legend-change"></span>ステータス更新日</span>`);
+
+        return `<div class="status-legend">${items.join('')}</div>`;
+    }
+
+    function createSummaryRow(project, displayIndex, months, filters = {}) {
         const color = project.color || '#3b82f6';
         const phases = project.phases || [];
+        const statusDays = project.status_days || [];
+        const dayMap = new Map(statusDays.map(day => [day.date, day]));
+        const startKey = filters.startKey || '';
+        const endKey = filters.endKey || '';
 
-        const monthLookup = (dateStr) => {
-            if (!dateStr) return null;
-            const date = new Date(dateStr);
-            if (Number.isNaN(date.getTime())) return null;
-            const target = months.findIndex(m => m.year === date.getFullYear() && m.month === date.getMonth());
-            if (target === -1) return null;
-            return target + 1;
-        };
+        const phaseList = phases.length
+            ? phases.map(phase => {
+                const originBadge = phase.origin === 'manual' ? '<span class="phase-badge">手動</span>' : '';
+                const statusBadge = phase.status ? `<span class="phase-status">${phase.status}</span>` : '';
+                return `<li>${phase.title} ${statusBadge} ${originBadge}</li>`;
+            }).join('')
+            : '<li class="phase-empty">フェーズ情報がありません</li>';
 
-        const bars = phases.map((phase, idx) => {
-            const startIndex = monthLookup(phase.plan_start) ?? monthLookup(phase.actual_start);
-            const endIndex = monthLookup(phase.plan_end) ?? monthLookup(phase.actual_end) ?? startIndex;
-            if (!startIndex || !endIndex) return '';
-            const spanEnd = endIndex + 1;
-            const originClass = phase.origin === 'manual' ? 'manual' : 'auto';
-            const statusColor = STATUS_COLOR_MAP[phase.status] || color;
-            const row = idx + 1;
-            const label = phase.status ? `<span class="bar-status">${phase.status}</span>` : '';
-            return `<div class="summary-bar ${originClass}" style="grid-column: ${startIndex} / ${spanEnd}; grid-row: ${row}; background:${statusColor};">
-                        ${label}
-                    </div>`;
+        const monthCells = months.map(month => {
+            const daysInMonth = month.daysInMonth || 30;
+            const dayBlocks = [];
+            for (let day = 1; day <= daysInMonth; day += 1) {
+                const dateKey = `${month.year}-${String(month.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const dayInfo = dayMap.get(dateKey);
+                const status = dayInfo?.status;
+                const withinStart = !startKey || dateKey >= startKey;
+                const withinEnd = !endKey || dateKey <= endKey;
+                const inRange = withinStart && withinEnd;
+                const blockColor = (inRange && status) ? (STATUS_COLOR_MAP[status] || color) : STATUS_EMPTY_COLOR;
+                const classes = ['status-day'];
+                if (!status) classes.push('status-day--empty');
+                if (!inRange) classes.push('status-day--muted');
+                if (dayInfo?.is_change) classes.push('status-day--change');
+                const tooltipParts = [dateKey];
+                if (status) tooltipParts.push(status);
+                if (dayInfo?.changed_by) tooltipParts.push(`更新者: ${dayInfo.changed_by}`);
+                if (dayInfo?.changed_at) tooltipParts.push(`更新日時: ${dayInfo.changed_at}`);
+                const title = tooltipParts.join(' / ');
+                dayBlocks.push(`<span class="${classes.join(' ')}" title="${title}" style="background:${blockColor};"></span>`);
+            }
+            return `<div class="summary-cell summary-status-month"><div class="status-day-grid" style="grid-template-columns: repeat(${daysInMonth}, minmax(6px, 1fr));">${dayBlocks.join('')}</div></div>`;
         }).join('');
-
-        const phaseList = phases.map(phase => {
-            const originBadge = phase.origin === 'manual' ? '<span class="phase-badge">手動</span>' : '';
-            const statusBadge = phase.status ? `<span class="phase-status">${phase.status}</span>` : '';
-            return `<li>${phase.title} ${statusBadge} ${originBadge}</li>`;
-        }).join('');
-
-        const templateRows = phases.length ? `repeat(${phases.length}, 1fr)` : 'repeat(1, 1fr)';
 
         return `
             <div class="summary-grid summary-row" style="grid-template-columns: 220px 200px repeat(${months.length}, 1fr);">
@@ -957,14 +1079,125 @@
                 <div class="summary-cell summary-phases">
                     <ul>${phaseList}</ul>
                 </div>
-                <div class="summary-cell summary-timeline">
-                    <div class="timeline-grid" style="grid-template-columns: repeat(${months.length}, 1fr); grid-template-rows: ${templateRows};">
-                        ${months.map(() => '<div class="timeline-cell"></div>').join('')}
-                        ${bars}
-                    </div>
-                </div>
+                ${monthCells}
             </div>
         `;
+    }
+
+    function renderStatusSheet(projectsParam, options = {}) {
+        if (!refs.statusSheet) return;
+        const startDate = options.startDate || null;
+        const endDate = options.endDate || null;
+        const startKey = startDate ? formatDate(startDate) : (state.filters.start_date || '');
+        const endKey = endDate ? formatDate(endDate) : (state.filters.end_date || '');
+
+        const selectedProjectId = state.filters.project_id;
+        let projects = Array.isArray(projectsParam) ? projectsParam : (state.projectSummary || []);
+        if (selectedProjectId) {
+            projects = projects.filter(project => String(project.project_id) === String(selectedProjectId));
+        }
+
+        const defaultNote = refs.statusSheetNote?.dataset?.defaultText || '';
+
+        if (!projects.length) {
+            refs.statusSheet.innerHTML = '<div class="status-sheet-empty">ステータス履歴は未取得です。案件や期間を変更して再表示してみてください。</div>';
+            if (refs.statusSheetNote) {
+                refs.statusSheetNote.textContent = defaultNote;
+            }
+            return;
+        }
+
+        const rows = [];
+        projects.forEach(project => {
+            const days = project.status_days || [];
+            if (!days.length) return;
+            days.forEach(day => {
+                const dateKey = day.date;
+                if (startKey && dateKey < startKey) return;
+                if (endKey && dateKey > endKey) return;
+                rows.push({
+                    date: dateKey,
+                    projectName: project.project_name || '',
+                    companyName: project.company_name || '',
+                    status: day.status || '',
+                    isChange: !!day.is_change,
+                    changedBy: day.changed_by || '',
+                    changedAt: day.changed_at || '',
+                    color: project.color || ''
+                });
+            });
+        });
+
+        if (!rows.length) {
+            refs.statusSheet.innerHTML = '<div class="status-sheet-empty">条件に一致するステータス履歴がありません。フィルタ条件を調整してください。</div>';
+            if (refs.statusSheetNote) {
+                refs.statusSheetNote.textContent = defaultNote;
+            }
+            return;
+        }
+
+        rows.sort((a, b) => {
+            if (a.date === b.date) {
+                const companyComp = (a.companyName || '').localeCompare(b.companyName || '', 'ja');
+                if (companyComp !== 0) return companyComp;
+                return (a.projectName || '').localeCompare(b.projectName || '', 'ja');
+            }
+            return a.date.localeCompare(b.date);
+        });
+
+        const tableRows = rows.map(row => {
+            const dateObj = parseISODate(row.date);
+            const weekday = dateObj ? WEEKDAY_LABELS[dateObj.getDay()] : '-';
+            const rowClasses = ['status-sheet-row'];
+            if (row.isChange) rowClasses.push('status-sheet-row--change');
+            const statusColor = row.status ? (STATUS_COLOR_MAP[row.status] || row.color || '#64748b') : STATUS_EMPTY_COLOR;
+            const statusLabel = row.status ? escapeHtml(row.status) : '未設定';
+            const statusBadgeClass = row.status ? 'status-sheet-status' : 'status-sheet-status status-sheet-status--empty';
+            const statusBadge = `<span class="${statusBadgeClass}" style="--status-color:${statusColor};">${statusLabel}</span>`;
+            const changeFlag = row.isChange ? '<span class="status-sheet-flag">更新</span>' : '';
+            const colorSwatch = row.color ? `<span class="status-sheet-color" style="background:${row.color};"></span>` : '';
+            const changedAt = row.changedAt ? escapeHtml(row.changedAt) : '-';
+            const changedBy = row.changedBy ? escapeHtml(row.changedBy) : '-';
+            return `
+                <tr class="${rowClasses.join(' ')}">
+                    <td>${escapeHtml(row.date)}</td>
+                    <td class="status-sheet-weekday">${weekday}</td>
+                    <td>${colorSwatch}${escapeHtml(row.companyName)}</td>
+                    <td>${escapeHtml(row.projectName)}</td>
+                    <td>${statusBadge}</td>
+                    <td>${changeFlag}</td>
+                    <td>${changedBy}</td>
+                    <td>${changedAt}</td>
+                </tr>
+            `;
+        }).join('');
+
+        const tableHtml = `
+            <table class="status-sheet-table">
+                <thead>
+                    <tr>
+                        <th>日付</th>
+                        <th>曜日</th>
+                        <th>会社</th>
+                        <th>案件</th>
+                        <th>ステータス</th>
+                        <th>更新</th>
+                        <th>更新者</th>
+                        <th>更新日時</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${tableRows}
+                </tbody>
+            </table>
+        `;
+
+        refs.statusSheet.innerHTML = tableHtml;
+
+        if (refs.statusSheetNote) {
+            const uniqueProjects = new Set(rows.map(row => `${row.companyName}__${row.projectName}`));
+            refs.statusSheetNote.textContent = `案件 ${uniqueProjects.size} 件 / 日数 ${rows.length} 日分を表示中（フィルタ適用済み）。`;
+        }
     }
 })();
 

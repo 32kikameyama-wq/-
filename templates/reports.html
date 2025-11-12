@@ -13,7 +13,7 @@
         <div class="report-card">
             <h3>案件別収支レポート</h3>
             <p>各案件の売上・コスト・粗利を一覧表示します。</p>
-            <button class="btn btn-primary">レポート生成</button>
+            <a class="btn btn-primary" href="{{ url_for('download_finance_report') }}">PDFダウンロード</a>
         </div>
         <div class="report-card">
             <h3>クライアント別サマリ</h3>
