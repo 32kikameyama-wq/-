@@ -1516,6 +1516,7 @@ def summarize_projects_for_gantt() -> list[dict]:
                 'project_name': project.get('name'),
                 'company_name': company['name'],
                 'color': color,
+                'assignee': project.get('assignee', ''),
                 'phases': [],
                 'range': {'plan_start': None, 'plan_end': None, 'timeline_start': None, 'timeline_end': None}
             }
@@ -1586,6 +1587,85 @@ def summarize_projects_for_gantt() -> list[dict]:
 
     summary.sort(key=lambda item: (item.get('company_name') or '', item.get('project_name') or ''))
     return summary
+
+
+def parse_date_safe(value: str | None):
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, '%Y-%m-%d').date()
+    except (TypeError, ValueError):
+        return None
+
+
+def filter_project_summary_entries(summary: list[dict], params: dict, filtered_tasks: list[dict]):
+    project_ids_from_tasks = {task.get('project_id') for task in filtered_tasks if task.get('project_id')}
+    project_filter = (params.get('project_id') or '').strip()
+    assignee_filter = (params.get('assignee') or '').strip()
+    status_filter = (params.get('status') or '').strip()
+    keyword_filter = (params.get('keyword') or '').strip().lower()
+    start_filter = parse_date_safe(params.get('start_date'))
+    end_filter = parse_date_safe(params.get('end_date'))
+
+    def entry_matches(entry):
+        if project_filter and str(entry.get('project_id')) != project_filter:
+            return False
+
+        if assignee_filter:
+            entry_assignee = entry.get('assignee') or ''
+            phase_assignees = {
+                phase.get('assignee')
+                for phase in entry.get('phases', [])
+                if phase.get('assignee')
+            }
+            if assignee_filter != entry_assignee and assignee_filter not in phase_assignees:
+                return False
+
+        if status_filter:
+            status_set = {
+                segment.get('status')
+                for segment in entry.get('status_timeline', [])
+                if segment.get('status')
+            }
+            status_set.update({
+                phase.get('status')
+                for phase in entry.get('phases', [])
+                if phase.get('status')
+            })
+            if status_filter not in status_set:
+                return False
+
+        if keyword_filter:
+            project_label = (entry.get('project_name') or '').lower()
+            company_label = (entry.get('company_name') or '').lower()
+            if keyword_filter not in project_label and keyword_filter not in company_label:
+                return False
+
+        entry_start = parse_date_safe(entry.get('range', {}).get('timeline_start') or entry.get('range', {}).get('plan_start'))
+        entry_end = parse_date_safe(entry.get('range', {}).get('timeline_end') or entry.get('range', {}).get('plan_end'))
+        if start_filter and entry_end and entry_end < start_filter:
+            return False
+        if end_filter and entry_start and entry_start > end_filter:
+            return False
+        return True
+
+    results = []
+    for entry in summary:
+        if project_filter and str(entry.get('project_id')) != project_filter:
+            continue
+        if project_ids_from_tasks and entry.get('project_id') not in project_ids_from_tasks:
+            continue
+        if not entry_matches(entry):
+            continue
+        results.append(entry)
+
+    if not results and project_filter:
+        # Fallback: show the requested project even if task filters narrowed everything out
+        results = [
+            entry for entry in summary
+            if str(entry.get('project_id')) == project_filter
+        ]
+    return results
 
 
 # 全案件をフラット化（全社統合ビュー用）
@@ -4290,13 +4370,31 @@ def admin_training_videos():
 @role_required('admin')
 def admin_gantt():
     user_tasks = filter_tasks_for_user(get_all_tasks(), g.current_user)
-    serialized_tasks = [serialize_gantt_task(task) for task in filter_tasks_by_params(user_tasks, {})]
-    filters = collect_task_filters(user_tasks)
+    filter_options = collect_task_filters(user_tasks)
+
+    params = {
+        'project_id': (request.args.get('project_id') or '').strip(),
+        'assignee': (request.args.get('assignee') or '').strip(),
+        'status': (request.args.get('status') or '').strip(),
+        'keyword': (request.args.get('keyword') or '').strip(),
+        'start_date': (request.args.get('start_date') or '').strip(),
+        'end_date': (request.args.get('end_date') or '').strip()
+    }
+
+    filtered_task_entries = filter_tasks_by_params(user_tasks, params)
+    serialized_tasks = [serialize_gantt_task(task) for task in filtered_task_entries]
+
+    project_summary_all = summarize_projects_for_gantt()
+    filtered_summary = filter_project_summary_entries(project_summary_all, params, filtered_task_entries)
+
     return render_template(
         'gantt.html',
         base_template='layout.html',
         initial_tasks=serialized_tasks,
-        filter_options=filters,
+        project_summary=filtered_summary,
+        filter_options=filter_options,
+        selected_filters=params,
+        project_choices=filter_options.get('projects', []),
         dependency_types=sorted(TASK_DEPENDENCY_TYPES),
         current_view='plan'
     )

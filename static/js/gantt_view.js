@@ -73,16 +73,32 @@
             return;
         }
 
-        populateFilterOptions(window.GANTT_FILTER_OPTIONS || {});
-        populateProjectSelect(window.GANTT_FILTER_OPTIONS || {});
+        state.filters = {
+            project_id: window.GANTT_SELECTED_FILTERS?.project_id || '',
+            assignee: window.GANTT_SELECTED_FILTERS?.assignee || '',
+            status: window.GANTT_SELECTED_FILTERS?.status || '',
+            keyword: window.GANTT_SELECTED_FILTERS?.keyword || '',
+            start_date: window.GANTT_SELECTED_FILTERS?.start_date || '',
+            end_date: window.GANTT_SELECTED_FILTERS?.end_date || ''
+        };
+
+        if (refs.filterProject) refs.filterProject.value = state.filters.project_id;
+        if (refs.filterAssignee) refs.filterAssignee.value = state.filters.assignee;
+        if (refs.filterStatus) refs.filterStatus.value = state.filters.status;
+        if (refs.filterKeyword) refs.filterKeyword.value = state.filters.keyword;
+        if (refs.filterStart) refs.filterStart.value = state.filters.start_date;
+        if (refs.filterEnd) refs.filterEnd.value = state.filters.end_date;
+
+        populateProjectSelect({ projects: window.GANTT_PROJECT_CHOICES || [] });
 
         state.allTasks = normalizeTasks(window.GANTT_INITIAL_DATA || []);
+        state.projectSummary = Array.isArray(window.GANTT_PROJECT_SUMMARY)
+            ? window.GANTT_PROJECT_SUMMARY
+            : [];
         syncTaskMap(state.allTasks);
         state.filteredTasks = [...state.allTasks];
         renderGantt();
         bindEvents();
-
-        refreshTasks({ showLoading: false });
     }
 
     function cacheRefs() {
@@ -98,8 +114,6 @@
         refs.filterKeyword = document.getElementById('gantt-filter-keyword');
         refs.filterStart = document.getElementById('gantt-filter-start');
         refs.filterEnd = document.getElementById('gantt-filter-end');
-        refs.filterApply = document.getElementById('gantt-filter-apply');
-        refs.filterReset = document.getElementById('gantt-filter-reset');
         refs.viewToggleButtons = Array.from(document.querySelectorAll('.view-toggle-btn'));
         refs.sidePanel = document.getElementById('gantt-side-panel');
         refs.sidePanelClose = document.getElementById('gantt-panel-close');
@@ -143,14 +157,12 @@
 
     function bindEvents() {
         if (refs.addButton) refs.addButton.addEventListener('click', openTaskModal);
-        if (refs.refreshButton) refs.refreshButton.addEventListener('click', () => refreshTasks({ showLoading: true }));
-        if (refs.filterApply) refs.filterApply.addEventListener('click', applyFilters);
-        if (refs.filterReset) refs.filterReset.addEventListener('click', resetFilters);
+        if (refs.refreshButton) refs.refreshButton.addEventListener('click', () => refreshTasks());
 
         if (refs.filterKeyword) {
             refs.filterKeyword.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter') {
-                    applyFilters();
+                    // submit form via native behaviour
                 }
             });
         }
@@ -429,63 +441,8 @@
         refreshTasks({ showLoading: true });
     }
 
-    function refreshTasks(options = {}) {
-        const {
-            showLoading = false,
-            keepSelection = false
-        } = options;
-
-        const params = new URLSearchParams();
-        params.append('view', state.view);
-        Object.entries(state.filters).forEach(([key, value]) => {
-            if (value) params.append(key, value);
-        });
-        if (state.role === 'admin' || state.role === 'editor') {
-            params.append('include_history', '0');
-        }
-
-        if (showLoading) {
-            refs.container?.classList.add('loading');
-            refs.viewport?.classList.add('is-loading');
-        }
-
-        fetch(`/api/gantt/tasks?${params.toString()}`)
-            .then(res => res.json())
-            .then(json => {
-                if (json.status !== 'success') {
-                    throw new Error(json.message || 'ガント情報の取得に失敗しました');
-                }
-                const data = normalizeTasks(json.data || []);
-                state.filteredTasks = data;
-                syncTaskMap([...state.taskMap.values(), ...data]);
-
-                if (json.meta && json.meta.all_tasks) {
-                    state.allTasks = normalizeTasks(json.meta.all_tasks);
-                    syncTaskMap(state.allTasks);
-                    // update project select with latest list
-                    populateFilterOptions(json.meta.filters || {});
-                    populateProjectSelect(json.meta.filters || {});
-                }
-                state.projectSummary = json.meta?.projects_summary || [];
-
-                renderGantt();
-
-                if (keepSelection && state.selectedTaskId) {
-                    openSidePanel(state.selectedTaskId);
-                } else if (!keepSelection) {
-                    closeSidePanel();
-                }
-            })
-            .catch(error => {
-                console.error(error);
-                alert(error.message || 'ガント情報の取得に失敗しました');
-            })
-            .finally(() => {
-                refs.container?.classList.remove('loading');
-                refs.viewport?.classList.remove('is-loading');
-                applyBarColors();
-                renderProjectSummary();
-            });
+    function refreshTasks() {
+        window.location.reload();
     }
 
     function openSidePanel(taskId) {
