@@ -3687,7 +3687,7 @@ section h3 {
 
 .gantt-filters .filter-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
     gap: 18px 20px;
     align-items: end;
 }
@@ -3704,6 +3704,18 @@ section h3 {
     color: #22405a;
     font-weight: 600;
     letter-spacing: 0.02em;
+}
+
+.gantt-filters .filter-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.gantt-filters .filter-actions .btn {
+    min-width: 120px;
 }
 
 .gantt-filters .filter-control {
