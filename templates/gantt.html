@@ -23,9 +23,6 @@
             <p class="page-subtitle">案件・タスクの計画と進捗を時間軸で可視化します</p>
         </div>
         <div class="header-actions">
-            <button class="btn btn-primary" id="gantt-add-task-btn">
-                <span>＋ タスクを追加</span>
-            </button>
             <button class="btn btn-secondary" id="gantt-refresh-btn">
                 更新
             </button>
@@ -63,13 +60,6 @@
                 <input type="date" id="gantt-filter-start" class="filter-control">
                 <span class="date-range-separator">〜</span>
                 <input type="date" id="gantt-filter-end" class="filter-control">
-            </div>
-        </div>
-        <div class="filter-group">
-            <label>ビュー</label>
-            <div class="view-toggle" role="group" aria-label="Plan/Actual Toggle">
-                <button class="view-toggle-btn active" data-view="plan">計画</button>
-                <button class="view-toggle-btn" data-view="actual">実績</button>
             </div>
         </div>
         <div class="filter-group">
