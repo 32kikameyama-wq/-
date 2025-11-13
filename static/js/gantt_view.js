@@ -872,136 +872,42 @@
         if (!refs.summaryContainer) return;
         const projects = state.projectSummary || [];
         const selectedProjectId = state.filters.project_id;
-        let filteredProjects = projects;
+        let filtered = projects;
         if (selectedProjectId) {
-            filteredProjects = projects.filter(project => String(project.project_id) === String(selectedProjectId));
+            filtered = projects.filter(project => String(project.project_id) === String(selectedProjectId));
         }
 
-        if (!filteredProjects.length) {
+        const startFilter = parseISODate(state.filters.start_date);
+        const endFilter = parseISODate(state.filters.end_date);
+
+        if (!filtered.length) {
             refs.summaryContainer.innerHTML = '<div class="gantt-summary-empty">表示できる案件がありません。フィルタ条件を変更してください。</div>';
-            renderStatusSheet(filteredProjects);
+            renderStatusSheet(filtered);
             return;
         }
 
-        const startFilterDate = parseISODate(state.filters.start_date);
-        const endFilterDate = parseISODate(state.filters.end_date);
-        const months = buildSummaryMonths(filteredProjects, startFilterDate, endFilterDate);
-        if (!months.length) {
-            refs.summaryContainer.innerHTML = '<div class="gantt-summary-empty">期間に一致する案件がありません。期間フィルタを調整してください。</div>';
-            renderStatusSheet(filteredProjects, { startDate: startFilterDate, endDate: endFilterDate });
+        const range = buildTimelineRange(filtered, startFilter, endFilter);
+        if (!range) {
+            refs.summaryContainer.innerHTML = '<div class="gantt-summary-empty">タイムラインを描画できませんでした。案件データに日付が含まれているか確認してください。</div>';
+            renderStatusSheet(filtered);
             return;
         }
 
-        const quarters = buildQuarterSpans(months);
-        const legend = buildStatusLegend(filteredProjects);
-        const header = `
-            <div class="summary-grid summary-header" style="grid-template-columns: 220px 200px repeat(${months.length}, 1fr);">
-                <div class="summary-cell summary-cell--head">案件 / 会社</div>
-                <div class="summary-cell summary-cell--head">フェーズ一覧</div>
-                ${months.map(m => `<div class="summary-cell summary-cell--month">${m.label}</div>`).join('')}
+        const legend = buildStatusLegend(filtered);
+        const header = buildTimelineHeader(range);
+        const rows = filtered.map((project, index) => buildTimelineRow(project, index + 1, range)).join('');
+
+        refs.summaryContainer.innerHTML = `
+            ${legend}
+            <div class="timeline-wrapper">
+                ${header}
+                <div class="timeline-body">
+                    ${rows}
+                </div>
             </div>
         `;
-        const quarterRow = `
-            <div class="summary-grid summary-quarter-row" style="grid-template-columns: 420px repeat(${months.length}, 1fr);">
-                <div class="summary-cell summary-cell--quarter-label">四半期</div>
-                ${quarters.map(q => `<div class="summary-cell summary-cell--quarter" style="grid-column: span ${q.span};">${q.label}</div>`).join('')}
-            </div>
-        `;
-        const rows = filteredProjects.map((project, index) => createSummaryRow(project, index + 1, months, {
-            startKey: startFilterDate ? formatDate(startFilterDate) : '',
-            endKey: endFilterDate ? formatDate(endFilterDate) : ''
-        })).join('');
-        refs.summaryContainer.innerHTML = `${legend}${quarterRow}${header}${rows}`;
-        renderStatusSheet(filteredProjects, { startDate: startFilterDate, endDate: endFilterDate });
-    }
 
-    function buildSummaryMonths(projects, startFilter, endFilter) {
-        let minDate = null;
-        let maxDate = null;
-
-        projects.forEach(project => {
-            const candidates = [
-                parseISODate(project.range?.plan_start),
-                parseISODate(project.range?.plan_end),
-                parseISODate(project.range?.timeline_start),
-                parseISODate(project.range?.timeline_end)
-            ];
-
-            (project.status_days || []).forEach(day => {
-                const dt = parseISODate(day.date);
-                if (dt) {
-                    candidates.push(dt);
-                }
-            });
-
-            candidates.forEach(date => {
-                if (!date) return;
-                const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
-                if (!minDate || monthStart < minDate) {
-                    minDate = monthStart;
-                }
-                if (!maxDate || monthStart > maxDate) {
-                    maxDate = monthStart;
-                }
-            });
-        });
-
-        if (!minDate || !maxDate) {
-            const today = new Date();
-            minDate = new Date(today.getFullYear(), today.getMonth(), 1);
-            maxDate = new Date(today.getFullYear(), today.getMonth(), 1);
-        }
-
-        const startCursor = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
-        const endCursor = new Date(maxDate.getFullYear(), maxDate.getMonth(), 1);
-        endCursor.setMonth(endCursor.getMonth() + 1);
-
-        const months = [];
-        const cursor = new Date(startCursor);
-        while (cursor <= endCursor) {
-            const year = cursor.getFullYear();
-            const month = cursor.getMonth();
-            months.push({
-                year,
-                month,
-                daysInMonth: getDaysInMonth(year, month),
-                label: `${year}年${month + 1}月`,
-                index: months.length + 1
-            });
-            cursor.setMonth(cursor.getMonth() + 1);
-        }
-
-        const filteredMonths = months.filter(month => {
-            const monthStart = new Date(month.year, month.month, 1);
-            const monthEnd = new Date(month.year, month.month, month.daysInMonth);
-            if (startFilter && monthEnd < startFilter) return false;
-            if (endFilter && monthStart > endFilter) return false;
-            return true;
-        });
-
-        if (!filteredMonths.length && months.length) {
-            return months;
-        }
-
-        return filteredMonths;
-    }
-
-    function buildQuarterSpans(months) {
-        const quarters = [];
-        let current = null;
-
-        months.forEach(m => {
-            const quarterNumber = Math.floor(m.month / 3) + 1;
-            const label = `${m.year}年度 第${quarterNumber}四半期`;
-            if (!current || current.label !== label) {
-                if (current) quarters.push(current);
-                current = { label, span: 1 };
-            } else {
-                current.span += 1;
-            }
-        });
-        if (current) quarters.push(current);
-        return quarters;
+        renderStatusSheet(filtered, { startDate: startFilter, endDate: endFilter, range });
     }
 
     function buildStatusLegend(projects) {
@@ -1026,62 +932,233 @@
         return `<div class="status-legend">${items.join('')}</div>`;
     }
 
-    function createSummaryRow(project, displayIndex, months, filters = {}) {
-        const color = project.color || '#3b82f6';
-        const phases = project.phases || [];
-        const statusDays = project.status_days || [];
-        const dayMap = new Map(statusDays.map(day => [day.date, day]));
-        const startKey = filters.startKey || '';
-        const endKey = filters.endKey || '';
+    function buildTimelineRange(projects, startFilter, endFilter) {
+        let minDate = null;
+        let maxDate = null;
 
-        const phaseList = phases.length
-            ? phases.map(phase => {
-                const originBadge = phase.origin === 'manual' ? '<span class="phase-badge">手動</span>' : '';
-                const statusBadge = phase.status ? `<span class="phase-status">${phase.status}</span>` : '';
-                return `<li>${phase.title} ${statusBadge} ${originBadge}</li>`;
-            }).join('')
-            : '<li class="phase-empty">フェーズ情報がありません</li>';
+        const considerDate = (date) => {
+            if (!date) return;
+            if (!minDate || date < minDate) minDate = date;
+            if (!maxDate || date > maxDate) maxDate = date;
+        };
 
-        const monthCells = months.map(month => {
-            const daysInMonth = month.daysInMonth || 30;
-            const dayBlocks = [];
-            for (let day = 1; day <= daysInMonth; day += 1) {
-                const dateKey = `${month.year}-${String(month.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                const dayInfo = dayMap.get(dateKey);
-                const status = dayInfo?.status;
-                const withinStart = !startKey || dateKey >= startKey;
-                const withinEnd = !endKey || dateKey <= endKey;
-                const inRange = withinStart && withinEnd;
-                const blockColor = (inRange && status) ? (STATUS_COLOR_MAP[status] || color) : STATUS_EMPTY_COLOR;
-                const classes = ['status-day'];
-                if (!status) classes.push('status-day--empty');
-                if (!inRange) classes.push('status-day--muted');
-                if (dayInfo?.is_change) classes.push('status-day--change');
-                const tooltipParts = [dateKey];
-                if (status) tooltipParts.push(status);
-                if (dayInfo?.changed_by) tooltipParts.push(`更新者: ${dayInfo.changed_by}`);
-                if (dayInfo?.changed_at) tooltipParts.push(`更新日時: ${dayInfo.changed_at}`);
-                const title = tooltipParts.join(' / ');
-                dayBlocks.push(`<span class="${classes.join(' ')}" title="${title}" style="background:${blockColor};"></span>`);
+        projects.forEach(project => {
+            (project.status_timeline || []).forEach(segment => {
+                considerDate(parseISODate(segment.start_date));
+                considerDate(parseISODate(segment.end_date));
+            });
+            (project.phases || []).forEach(phase => {
+                considerDate(parseISODate(phase.plan_start));
+                considerDate(parseISODate(phase.plan_end));
+                considerDate(parseISODate(phase.actual_start));
+                considerDate(parseISODate(phase.actual_end));
+            });
+            considerDate(parseISODate(project.range?.plan_start));
+            considerDate(parseISODate(project.range?.plan_end));
+            considerDate(parseISODate(project.range?.timeline_start));
+            considerDate(parseISODate(project.range?.timeline_end));
+        });
+
+        if (!minDate || !maxDate) {
+            return null;
+        }
+
+        if (startFilter && startFilter <= maxDate) {
+            minDate = startFilter < minDate ? startFilter : minDate;
+        }
+        if (endFilter && endFilter >= minDate) {
+            maxDate = endFilter > maxDate ? endFilter : maxDate;
+        }
+
+        const today = new Date();
+        if (today < minDate) {
+            minDate = today;
+        } else if (today > maxDate) {
+            maxDate = today;
+        }
+
+        minDate = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+        maxDate = new Date(maxDate.getFullYear(), maxDate.getMonth() + 1, 0);
+
+        if (minDate > maxDate) {
+            return null;
+        }
+
+        const totalDays = diffInDays(minDate, maxDate) + 1;
+        if (totalDays <= 0) {
+            return null;
+        }
+
+        const months = [];
+        let cursor = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+        while (cursor <= maxDate) {
+            const start = new Date(cursor);
+            const end = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
+            const days = diffInDays(start, end) + 1;
+            months.push({
+                start,
+                end,
+                days,
+                percent: (days / totalDays) * 100,
+                label: `${start.getFullYear()}年${start.getMonth() + 1}月`
+            });
+            cursor.setMonth(cursor.getMonth() + 1);
+        }
+
+        const weeks = [];
+        const weekStart = new Date(minDate);
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+        let weekCursor = weekStart;
+        let weekIndex = 1;
+        while (weekCursor <= maxDate) {
+            const start = new Date(Math.max(weekCursor, minDate));
+            const tmpEnd = new Date(weekCursor);
+            tmpEnd.setDate(tmpEnd.getDate() + 6);
+            const end = new Date(Math.min(tmpEnd, maxDate));
+            const days = diffInDays(start, end) + 1;
+            if (days > 0) {
+                weeks.push({
+                    start,
+                    end,
+                    days,
+                    percent: (days / totalDays) * 100,
+                    label: `W${weekIndex}`
+                });
+                weekIndex += 1;
             }
-            return `<div class="summary-cell summary-status-month"><div class="status-day-grid" style="grid-template-columns: repeat(${daysInMonth}, minmax(6px, 1fr));">${dayBlocks.join('')}</div></div>`;
-        }).join('');
+            weekCursor.setDate(weekCursor.getDate() + 7);
+        }
+
+        const todayPercent = (today >= minDate && today <= maxDate)
+            ? (diffInDays(minDate, today) / totalDays) * 100
+            : null;
+
+        return {
+            startDate: minDate,
+            endDate: maxDate,
+            totalDays,
+            months,
+            weeks,
+            todayPercent
+        };
+    }
+
+    function buildTimelineHeader(range) {
+        const monthCells = range.months.map(month => `
+            <div class="timeline-header-month" style="width:${month.percent}%;">
+                <span>${month.label}</span>
+            </div>
+        `).join('');
+
+        const weekCells = range.weeks.map(week => `
+            <div class="timeline-header-week" style="width:${week.percent}%;">
+                <span>${week.label}</span>
+            </div>
+        `).join('');
+
+        const todayMarker = range.todayPercent !== null
+            ? `<div class="timeline-header-today" style="left:${range.todayPercent}%;">今日</div>`
+            : '';
 
         return `
-            <div class="summary-grid summary-row" style="grid-template-columns: 220px 200px repeat(${months.length}, 1fr);">
-                <div class="summary-cell summary-project">
-                    <span class="project-index" style="border-color:${color}; color:${color};">${displayIndex}</span>
-                    <div class="project-info">
-                        <div class="project-name">${project.project_name || '未設定'}</div>
-                        <div class="project-company">${project.company_name || '-'}</div>
-                    </div>
-                </div>
-                <div class="summary-cell summary-phases">
-                    <ul>${phaseList}</ul>
-                </div>
-                ${monthCells}
+            <div class="timeline-header-grid" style="--total-days:${range.totalDays};">
+                <div class="timeline-header-months">${monthCells}</div>
+                <div class="timeline-header-weeks">${weekCells}</div>
+                ${todayMarker}
             </div>
         `;
+    }
+
+    function buildTimelineRow(project, displayIndex, range) {
+        const color = project.color || '#3b82f6';
+        const phases = project.phases || [];
+        const statusSegments = project.status_timeline || [];
+        const layers = Math.max(1, phases.length + 1);
+        const rowHeight = 28 * layers + 20;
+
+        const bars = [
+            ...buildStatusBars(statusSegments, range, color),
+            ...buildPhaseBars(phases, range)
+        ];
+
+        const todayMarker = range.todayPercent !== null
+            ? `<div class="timeline-today-line" style="left:${range.todayPercent}%"></div>`
+            : '';
+
+        return `
+            <div class="timeline-row">
+                <div class="timeline-row-info">
+                    <span class="timeline-row-index" style="border-color:${color}; color:${color};">${displayIndex}</span>
+                    <div class="timeline-row-meta">
+                        <div class="timeline-row-project">${escapeHtml(project.project_name || '未設定')}</div>
+                        <div class="timeline-row-company">${escapeHtml(project.company_name || '-')}</div>
+                    </div>
+                </div>
+                <div class="timeline-row-grid" style="--total-days:${range.totalDays}; min-height:${rowHeight}px;">
+                    ${todayMarker}
+                    ${bars.join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    function buildStatusBars(segments, range, fallbackColor) {
+        const bars = [];
+        (segments || []).forEach(segment => {
+            const startDate = clampDate(parseISODate(segment.start_date), range.startDate, range.endDate);
+            const endDate = clampDate(parseISODate(segment.end_date), range.startDate, range.endDate);
+            if (!startDate || !endDate || endDate < startDate) return;
+            const offsetDays = diffInDays(range.startDate, startDate);
+            const spanDays = diffInDays(startDate, endDate) + 1;
+            const leftPercent = (offsetDays / range.totalDays) * 100;
+            const widthPercent = Math.max(0.5, (spanDays / range.totalDays) * 100);
+            const status = segment.status || '';
+            const color = STATUS_COLOR_MAP[status] || fallbackColor;
+            const label = status ? escapeHtml(status) : '未設定';
+            bars.push(`
+                <div class="timeline-bar timeline-bar--status" style="--bar-index:0; left:${leftPercent}%; width:${widthPercent}%; background:${color};">
+                    <span class="timeline-bar-label">${label}</span>
+                </div>
+            `);
+        });
+        return bars;
+    }
+
+    function buildPhaseBars(phases, range) {
+        const bars = [];
+        (phases || []).forEach((phase, idx) => {
+            const startDate = clampDate(parseISODate(phase.plan_start) || parseISODate(phase.actual_start), range.startDate, range.endDate);
+            const endDate = clampDate(parseISODate(phase.plan_end) || parseISODate(phase.actual_end), range.startDate, range.endDate);
+            if (!startDate || !endDate || endDate < startDate) return;
+            const offsetDays = diffInDays(range.startDate, startDate);
+            const spanDays = diffInDays(startDate, endDate) + 1;
+            const leftPercent = (offsetDays / range.totalDays) * 100;
+            const widthPercent = Math.max(0.5, (spanDays / range.totalDays) * 100);
+            const originClass = phase.origin === 'manual' ? 'timeline-bar--manual' : 'timeline-bar--auto';
+            const label = escapeHtml(phase.title || '');
+            const status = phase.status ? `<span class="timeline-bar-status">${escapeHtml(phase.status)}</span>` : '';
+            bars.push(`
+                <div class="timeline-bar timeline-bar--phase ${originClass}" style="--bar-index:${idx + 1}; left:${leftPercent}%; width:${widthPercent}%;">
+                    <span class="timeline-bar-label">${label}${status}</span>
+                </div>
+            `);
+        });
+        return bars;
+    }
+
+    function clampDate(date, min, max) {
+        if (!date) return null;
+        let clamped = date;
+        if (min && clamped < min) clamped = min;
+        if (max && clamped > max) clamped = max;
+        return clamped;
+    }
+
+    function diffInDays(start, end) {
+        const msPerDay = 24 * 60 * 60 * 1000;
+        const startUTC = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
+        const endUTC = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate());
+        return Math.round((endUTC - startUTC) / msPerDay);
     }
 
     function renderStatusSheet(projectsParam, options = {}) {

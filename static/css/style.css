@@ -4066,6 +4066,226 @@ section h3 {
     border: 1px solid rgba(99, 102, 241, 0.2);
 }
 
+.timeline-wrapper {
+    border: 1px solid #d0d7e2;
+    border-radius: 16px;
+    background: #fff;
+    padding: 16px 0;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+    margin-bottom: 28px;
+}
+
+.timeline-header-grid {
+    position: relative;
+    padding: 0 32px 12px 240px;
+    border-bottom: 1px solid #dce4f3;
+}
+
+.timeline-header-months,
+.timeline-header-weeks {
+    display: flex;
+    position: relative;
+    gap: 0;
+}
+
+.timeline-header-month {
+    position: relative;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.88em;
+    color: #1e2a3d;
+    padding: 6px 4px;
+    border-right: 1px solid rgba(209, 214, 230, 0.9);
+    background: rgba(241, 245, 249, 0.6);
+}
+
+.timeline-header-month:last-child {
+    border-right: none;
+}
+
+.timeline-header-week {
+    text-align: center;
+    font-size: 0.75em;
+    color: #5b6a81;
+    padding: 4px 0;
+    border-right: 1px solid rgba(224, 231, 255, 0.9);
+    background: rgba(255, 255, 255, 0.75);
+}
+
+.timeline-header-week:last-child {
+    border-right: none;
+}
+
+.timeline-header-today {
+    position: absolute;
+    top: -6px;
+    width: 0;
+    border-left: 2px solid #22c55e;
+    height: calc(100% + 12px);
+    pointer-events: none;
+}
+
+.timeline-header-today::after {
+    content: 'Today';
+    position: absolute;
+    top: -16px;
+    left: -18px;
+    font-size: 0.72em;
+    color: #15803d;
+    background: #e0f2f1;
+    padding: 2px 6px;
+    border-radius: 6px;
+    border: 1px solid rgba(21, 128, 61, 0.35);
+}
+
+.timeline-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.timeline-row {
+    display: flex;
+    padding: 14px 24px;
+    gap: 20px;
+    border-bottom: 1px solid #eef2f8;
+}
+
+.timeline-row:last-child {
+    border-bottom: none;
+}
+
+.timeline-row-info {
+    width: 200px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.timeline-row-index {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid #3b82f6;
+    font-weight: 600;
+    font-size: 0.85em;
+}
+
+.timeline-row-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.timeline-row-project {
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #1e2a3d;
+}
+
+.timeline-row-company {
+    font-size: 0.78em;
+    color: #64748b;
+}
+
+.timeline-row-grid {
+    position: relative;
+    flex: 1;
+    background: linear-gradient(to bottom, rgba(241, 245, 249, 0.6), rgba(241, 245, 249, 0.2));
+    border-radius: 12px;
+    border: 1px solid #dce4f3;
+    overflow: hidden;
+}
+
+.timeline-row-grid::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(
+        to right,
+        rgba(226, 232, 240, 0.6) 0,
+        rgba(226, 232, 240, 0.6) calc(100% / var(--total-days)),
+        transparent calc(100% / var(--total-days)),
+        transparent calc(200% / var(--total-days))
+    );
+    pointer-events: none;
+}
+
+.timeline-row-grid::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(to right, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
+    background-size: calc(100% / 6) 100%;
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+.timeline-today-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    border-left: 2px dashed rgba(34, 197, 94, 0.9);
+    pointer-events: none;
+    z-index: 2;
+}
+
+.timeline-bar {
+    position: absolute;
+    top: calc(18px + (var(--bar-index, 0) * 28px));
+    height: 22px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    color: #0f172a;
+    font-size: 0.78em;
+    font-weight: 600;
+    box-shadow: 0 3px 8px rgba(15, 23, 42, 0.15);
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.timeline-bar--status {
+    height: 24px;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 6px 15px rgba(51, 65, 85, 0.25);
+}
+
+.timeline-bar--phase {
+    background: rgba(59, 130, 246, 0.18);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    color: #1e3a8a;
+}
+
+.timeline-bar--manual {
+    background: rgba(251, 146, 60, 0.22);
+    border-color: rgba(251, 146, 60, 0.4);
+    color: #9a3412;
+}
+
+.timeline-bar-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.timeline-bar-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    font-size: 0.72em;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.1);
+    color: #0f172a;
+}
+
 .gantt-status-sheet {
     margin-top: 28px;
     padding: 20px 24px;
