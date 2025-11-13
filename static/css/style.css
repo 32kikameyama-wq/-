@@ -3687,7 +3687,7 @@ section h3 {
 
 .gantt-filters .filter-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 18px 20px;
     align-items: end;
 }
@@ -3706,16 +3706,17 @@ section h3 {
     letter-spacing: 0.02em;
 }
 
-.gantt-filters .filter-actions {
-    display: flex;
-    gap: 10px;
-    align-items: center;
+.gantt-filters .filter-group.filter-actions {
+    flex-direction: row;
+    gap: 12px;
     justify-content: flex-end;
-    flex-wrap: wrap;
+    align-items: flex-end;
+    grid-column: span 2;
 }
 
-.gantt-filters .filter-actions .btn {
-    min-width: 120px;
+.gantt-filters .filter-group.filter-actions .btn {
+    min-width: 130px;
+    flex: 0 0 auto;
 }
 
 .gantt-filters .filter-control {
