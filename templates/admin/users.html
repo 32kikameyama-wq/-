@@ -26,7 +26,7 @@
                 <table class="users-table">
                     <thead>
                         <tr>
-                            <th>ID</th>
+                            <th>ユーザー番号</th>
                             <th>氏名</th>
                             <th>メールアドレス</th>
                             <th>ロール</th>
@@ -36,7 +36,7 @@
                     <tbody>
                         {% for user in users %}
                         <tr>
-                            <td>{{ user.id }}</td>
+                            <td data-user-id="{{ user.id }}">{{ loop.index }}</td>
                             <td>{{ user.name }}</td>
                             <td>{{ user.email }}</td>
                             <td>{{ role_labels.get(user.role, user.role) }}</td>
