@@ -2251,6 +2251,7 @@ def api_create_company():
         'data': {
             'company': new_company,
             'management_url': management_url
+            
         }
     })
 
@@ -3769,13 +3770,30 @@ def editor_input_videos():
 @role_required('admin', 'editor')
 def editor_gantt():
     user_tasks = filter_tasks_for_user(get_all_tasks(), g.current_user)
-    serialized_tasks = [serialize_gantt_task(task) for task in filter_tasks_by_params(user_tasks, {})]
-    filters = collect_task_filters(user_tasks)
+    filter_options = collect_task_filters(user_tasks)
+
+    params = {
+        'project_id': (request.args.get('project_id') or '').strip(),
+        'assignee': (request.args.get('assignee') or '').strip(),
+        'status': (request.args.get('status') or '').strip(),
+        'keyword': (request.args.get('keyword') or '').strip(),
+        'start_date': (request.args.get('start_date') or '').strip(),
+        'end_date': (request.args.get('end_date') or '').strip()
+    }
+
+    filtered_task_entries = filter_tasks_by_params(user_tasks, params)
+    serialized_tasks = [serialize_gantt_task(task) for task in filtered_task_entries]
+
+    project_summary_all = summarize_projects_for_gantt()
+    filtered_summary = filter_project_summary_entries(project_summary_all, params, filtered_task_entries)
     return render_template(
         'gantt.html',
         base_template='editor_layout.html',
         initial_tasks=serialized_tasks,
-        filter_options=filters,
+        project_summary=filtered_summary,
+        filter_options=filter_options,
+        selected_filters=params,
+        project_choices=filter_options.get('projects', []),
         dependency_types=sorted(TASK_DEPENDENCY_TYPES),
         current_view='plan'
     )
