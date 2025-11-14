@@ -34,12 +34,16 @@
                             </a>
                         </li>
                         {% endif %}
+                        {% if current_user.role in ['admin', 'editor', 'client'] %}
                         <li class="user-menu-item">
-                            <span class="user-menu-link disabled" title="準備中">
+                            <a href="{{ url_for('client_dashboard') }}" class="user-menu-link {% if request.endpoint == 'client_dashboard' or (request.endpoint and request.endpoint.startswith('client_')) %}active{% endif %}">
                                 <span class="user-menu-text">クライアントページ</span>
-                                <span class="user-menu-subtext">準備中</span>
-                            </span>
+                                {% if current_user.role != 'client' %}
+                                <span class="user-menu-subtext">プレビュー</span>
+                                {% endif %}
+                            </a>
                         </li>
+                        {% endif %}
                     </ul>
                     <div class="user-actions">
                         <form action="{{ url_for('logout') }}" method="post" class="user-menu-form">

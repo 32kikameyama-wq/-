@@ -9,7 +9,8 @@ from flask import (
     g,
     abort,
     send_from_directory,
-    send_file
+    send_file,
+    has_request_context
 )
 from flask_cors import CORS
 import os
@@ -50,6 +51,10 @@ app.config['STATIC_FOLDER'] = 'static'
 app.config['TEMPLATES_FOLDER'] = 'templates'
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key')
 
+PRIMARY_OWNER_EMAIL = os.environ.get('PRIMARY_OWNER_EMAIL', 'keisuke030742@gmail.com')
+PRIMARY_OWNER_PASSWORD = os.environ.get('PRIMARY_OWNER_PASSWORD', '1234')
+PRIMARY_OWNER_NAME = os.environ.get('PRIMARY_OWNER_NAME', '大田圭介')
+PRIMARY_OWNER_ROLE = os.environ.get('PRIMARY_OWNER_ROLE', 'admin')
 
 raw_database_url = os.environ['DATABASE_URL']
 parsed_url = urlparse(raw_database_url)
@@ -459,6 +464,51 @@ def ensure_default_users():
     if editor:
         create_editor_workspace_for_user(editor)
 
+    ensure_primary_owner_account()
+
+
+def ensure_primary_owner_account():
+    owner_email = (PRIMARY_OWNER_EMAIL or '').strip().lower()
+    if not owner_email:
+        return
+
+    desired_role = (PRIMARY_OWNER_ROLE or 'admin').strip().lower()
+    if desired_role not in {'admin', 'editor', 'client'}:
+        desired_role = 'admin'
+
+    owner = get_user_by_email(owner_email)
+    password_hash_value = hash_password(PRIMARY_OWNER_PASSWORD or '1234')
+
+    if owner:
+        execute(
+            """
+            update app.users
+            set name = :name,
+                role = :role,
+                password_hash = :password_hash,
+                active = true
+            where id = :id
+            """,
+            name=PRIMARY_OWNER_NAME or owner.get('name') or 'オーナー',
+            role=desired_role,
+            password_hash=password_hash_value,
+            id=owner['id']
+        )
+        owner = get_user_by_email(owner_email)
+    else:
+        owner = create_user(
+            name=PRIMARY_OWNER_NAME or 'オーナー',
+            email=owner_email,
+            role=desired_role,
+            password_hash=password_hash_value,
+            active=True
+        )
+
+    if owner.get('role') == 'editor':
+        create_editor_workspace_for_user(owner)
+    if owner.get('role') == 'client':
+        ensure_client_portal_profile(owner)
+
 
 def ensure_default_training_videos():
     count_row = fetch_one("select count(1) as cnt from app.training_videos")
@@ -575,6 +625,24 @@ def role_required(*roles):
     return decorator
 
 
+def get_default_home_endpoint(role: str | None) -> str:
+    if role == 'client':
+        return 'client_dashboard'
+    if role == 'editor':
+        return 'editor_dashboard'
+    return 'index'
+
+
+def is_client_allowed_endpoint(endpoint_name: str | None) -> bool:
+    if not endpoint_name:
+        return False
+    if endpoint_name in {'client_dashboard', 'logout'}:
+        return True
+    if endpoint_name.startswith('client_'):
+        return True
+    return False
+
+
 def normalize_next_url(raw_value, default_endpoint=None):
     if not raw_value:
         return url_for(default_endpoint) if default_endpoint else None
@@ -627,6 +695,12 @@ def enforce_authentication():
     if not current_user:
         next_url = request.full_path if request.query_string else request.path
         return redirect(url_for('login', next=next_url))
+
+    if current_user.get('role') == 'client':
+        if not is_client_allowed_endpoint(endpoint_root):
+            if request.method == 'GET':
+                return redirect(url_for('client_dashboard'))
+            abort(403)
 
 
 @app.context_processor
@@ -807,6 +881,9 @@ SAMPLE_ASSETS = [
     }
 ]
 
+CLIENT_FINAL_ASSET_KINDS = {'final', 'delivery', '納品', 'complete', 'final_cut'}
+CLIENT_PORTAL_PROFILES: dict[int, dict] = {}
+
 TASK_ID_COUNTER = count(20000)
 PROJECT_GANTT_TASKS: dict[int, list[dict]] = {}
 GENERAL_TASKS: list[dict] = []
@@ -831,6 +908,31 @@ PROJECT_COLOR_PALETTE = [
     '#64748b',  # slate
 ]
 PROJECT_COLOR_ASSIGNMENTS: dict[int, list[str]] = {}
+
+
+def ensure_client_portal_profile(user: dict | None):
+    if not user:
+        return None
+    profile = CLIENT_PORTAL_PROFILES.get(user['id'])
+    display_name = f"{user['name']}さんのポータル"
+    if not profile:
+        profile = {
+            'user_id': user['id'],
+            'owner_name': user['name'],
+            'display_name': display_name,
+            'welcome_message': '案件の進捗・納品状況をこちらでリアルタイムに確認できます。',
+            'project_scope_label': '全案件を表示中',
+            'created_at': datetime.now().strftime('%Y-%m-%d %H:%M')
+        }
+        CLIENT_PORTAL_PROFILES[user['id']] = profile
+    else:
+        profile['owner_name'] = user['name']
+        profile['display_name'] = display_name
+    return profile
+
+
+def get_client_portal_profile(user_id: int):
+    return CLIENT_PORTAL_PROFILES.get(user_id)
 
 
 def parse_iso_date(value, fallback=None):
@@ -1383,6 +1485,132 @@ def build_project_status_timeline(project: dict):
         'start': segments[0]['start_date'] if segments else None,
         'end': segments[-1]['end_date'] if segments else None,
         'history': history_payload
+    }
+
+
+STATUS_BADGE_CLASS_MAP = {
+    '完了': 'is-complete',
+    '納品済': 'is-complete',
+    '納品待ち': 'is-delivery',
+    'レビュー中': 'is-review',
+    '確認待ち': 'is-review',
+    '進行中': 'is-progress',
+    '計画中': 'is-planning',
+    '制作中': 'is-planning',
+    '期限超過': 'is-danger',
+    '遅延': 'is-danger',
+    '残り僅か': 'is-warning'
+}
+
+
+def get_status_badge_class(status: str) -> str:
+    if not status:
+        return 'is-default'
+    normalized = str(status).strip().replace(' ', '')
+    return STATUS_BADGE_CLASS_MAP.get(normalized, 'is-default')
+
+
+def build_client_portal_context(current_user):
+    all_projects = get_all_projects()
+    today = datetime.now().date()
+    assets_page_url = url_for('assets') if has_request_context() else '/assets'
+
+    deliverables = []
+    progress_entries = []
+    alerts = {'due_soon': [], 'overdue': []}
+
+    for project in all_projects:
+        company_name = project.get('client_name') or project.get('company_name') or '未設定'
+        company_id = project.get('company_id') or 0
+        color = ensure_project_color(company_id, project)
+        due_date = parse_iso_date(project.get('due_date'))
+        delivery_date = parse_iso_date(project.get('delivery_date'))
+        status = project.get('status') or '進行中'
+        progress_value = project.get('progress') or 0
+        delivered = bool(project.get('delivered'))
+        days_to_due = (due_date - today).days if due_date else None
+
+        timeline = build_project_status_timeline(project)
+        recent_history = list(reversed(timeline.get('history', [])[-4:]))
+
+        progress_entry = {
+            'project_id': project.get('id'),
+            'project_name': project.get('name'),
+            'company_name': company_name,
+            'color': color,
+            'status': status,
+            'status_class': get_status_badge_class(status),
+            'progress': progress_value,
+            'due_date': due_date.strftime('%Y-%m-%d') if due_date else '',
+            'delivery_date': delivery_date.strftime('%Y-%m-%d') if delivery_date else '',
+            'days_to_due': days_to_due,
+            'delivered': delivered,
+            'recent_history': recent_history,
+            'timeline': timeline
+        }
+        progress_entries.append(progress_entry)
+
+        if days_to_due is not None and not delivered:
+            if days_to_due < 0:
+                alerts['overdue'].append(progress_entry)
+            elif days_to_due <= 5:
+                alerts['due_soon'].append(progress_entry)
+
+        final_assets = [
+            {
+                'id': asset.get('id'),
+                'name': asset.get('name'),
+                'size': asset.get('size'),
+                'version': asset.get('version'),
+                'uploaded_at': asset.get('uploaded_at'),
+                'download_url': asset.get('url') or assets_page_url
+            }
+            for asset in SAMPLE_ASSETS
+            if asset.get('project_name') == project.get('name')
+            and str(asset.get('kind', '')).lower() in CLIENT_FINAL_ASSET_KINDS
+        ]
+
+        if delivered or final_assets:
+            approval_label = '納品済' if delivered else ('確認待ち' if status in {'レビュー中', '納品待ち'} else '制作中')
+            deliverables.append({
+                'project_id': project.get('id'),
+                'project_name': project.get('name'),
+                'company_name': company_name,
+                'approval_label': approval_label,
+                'badge_class': get_status_badge_class(approval_label),
+                'delivery_date': delivery_date.strftime('%Y-%m-%d') if delivery_date else '',
+                'due_date': due_date.strftime('%Y-%m-%d') if due_date else '',
+                'days_to_due': days_to_due,
+                'progress': progress_value,
+                'delivered': delivered,
+                'color': color,
+                'assets': final_assets
+            })
+
+    deliverables.sort(key=lambda item: item.get('delivery_date') or item.get('due_date') or '0000-00-00', reverse=True)
+    progress_entries.sort(key=lambda item: (
+        item.get('delivered', False),
+        item.get('due_date') or '9999-12-31',
+        item.get('project_name') or ''
+    ))
+
+    summary = {
+        'total_projects': len(all_projects),
+        'active_projects': len([p for p in all_projects if p.get('status') in {'進行中', 'レビュー中', '納品待ち'}]),
+        'delivered_projects': len([p for p in all_projects if p.get('delivered') or p.get('status') == '完了']),
+        'review_projects': len([p for p in all_projects if p.get('status') in {'レビュー中', '納品待ち'}]),
+        'delivery_ready': len(deliverables),
+        'due_soon_count': len(alerts['due_soon']),
+        'overdue_count': len(alerts['overdue'])
+    }
+
+    return {
+        'summary': summary,
+        'deliverables': deliverables,
+        'progress_entries': progress_entries,
+        'alerts': alerts,
+        'today_label': today.strftime('%Y-%m-%d'),
+        'portal_profile': ensure_client_portal_profile(current_user) if current_user else None
     }
 
 
@@ -3353,6 +3581,15 @@ def board():
     return render_template('board.html', projects=all_projects, companies=SAMPLE_COMPANIES)
 
 
+@app.route('/client')
+@login_required
+@role_required('admin', 'editor', 'client')
+def client_dashboard():
+    """クライアント向けポータル"""
+    context = build_client_portal_context(g.current_user)
+    return render_template('client/index.html', **context)
+
+
 @app.route('/editor')
 @login_required
 @role_required('admin', 'editor')
@@ -3876,7 +4113,10 @@ def login():
             error = 'このユーザーは無効化されています。管理者に連絡してください。'
         else:
             session['user_id'] = user['id']
-            return redirect(next_url or url_for('index'))
+            default_endpoint = get_default_home_endpoint(user.get('role'))
+            if user.get('role') == 'client':
+                return redirect(url_for(default_endpoint))
+            return redirect(next_url or url_for(default_endpoint))
 
     next_url = normalize_next_url(request.args.get('next'))
     return render_template('auth/login.html', error=error, next_url=next_url or '')
@@ -3940,6 +4180,9 @@ def admin_users():
             if new_user['role'] == 'editor':
                 create_editor_workspace_for_user(new_user)
                 workspace_message = ' 編集者用共有ページも自動生成されました。'
+            elif new_user['role'] == 'client':
+                ensure_client_portal_profile(new_user)
+                workspace_message = ' クライアント専用ポータルが割り当てられました。'
             success = f'ユーザーを作成しました。初期パスワードを共有してください。{workspace_message}'
             form_data = {}
 

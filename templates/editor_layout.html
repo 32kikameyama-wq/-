@@ -25,6 +25,9 @@
                     {% if current_user.role == 'admin' %}
                     <a href="{{ url_for('index') }}" class="switch-link">→ 管理者画面へ</a>
                     {% endif %}
+                    {% if current_user.role in ['admin', 'editor', 'client'] %}
+                    <a href="{{ url_for('client_dashboard') }}" class="switch-link">→ クライアント画面へ</a>
+                    {% endif %}
                     <form action="{{ url_for('logout') }}" method="post" class="user-menu-form">
                         <input type="hidden" name="next" value="{{ url_for('login') }}">
                         <button type="submit" class="logout-button">ログアウト</button>

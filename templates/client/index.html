@@ -1,0 +1,223 @@
+{% extends "client_layout.html" %}
+
+{% block title %}クライアントダッシュボード - 案件管理システム{% endblock %}
+
+{% block content %}
+<div class="client-dashboard">
+    <header class="client-hero">
+        <div>
+            <p class="client-hero-label">マイポータル</p>
+            <h1>
+                {% if portal_profile %}
+                    {{ portal_profile.display_name }}
+                {% else %}
+                    {{ current_user.name }}さんのポータル
+                {% endif %}
+            </h1>
+            <p class="client-hero-message">
+                {% if portal_profile %}
+                    {{ portal_profile.welcome_message }}
+                {% else %}
+                    案件の進捗と納品状況をリアルタイムに確認できます。
+                {% endif %}
+            </p>
+        </div>
+        <div class="client-hero-meta">
+            <span class="status-badge is-progress">ログイン中</span>
+            <p class="client-hero-updated">最終更新 {{ today_label }}</p>
+        </div>
+    </header>
+
+    <section class="client-section">
+        <div class="client-section-header">
+            <div>
+                <h2 class="section-title">案件サマリー</h2>
+                <p class="section-subtitle">最新更新日 {{ today_label }} 時点の状況</p>
+            </div>
+        </div>
+        <div class="client-summary-grid">
+            <article class="client-summary-card">
+                <p class="summary-label">進行中の案件</p>
+                <p class="summary-value">{{ summary.active_projects }}</p>
+                <p class="summary-subtext">全{{ summary.total_projects }}件中</p>
+            </article>
+            <article class="client-summary-card">
+                <p class="summary-label">レビュー・確認待ち</p>
+                <p class="summary-value">{{ summary.review_projects }}</p>
+                <p class="summary-subtext">納品前にご確認ください</p>
+            </article>
+            <article class="client-summary-card">
+                <p class="summary-label">納品済み</p>
+                <p class="summary-value">{{ summary.delivered_projects }}</p>
+                <p class="summary-subtext">完了済みの案件数</p>
+            </article>
+            <article class="client-summary-card">
+                <p class="summary-label">共有済み動画ファイル</p>
+                <p class="summary-value">{{ summary.delivery_ready }}</p>
+                <p class="summary-subtext">確認可能な動画の件数</p>
+            </article>
+        </div>
+    </section>
+
+    <section class="client-section" id="deliverables">
+        <div class="client-section-header">
+            <div>
+                <h2 class="section-title">完成動画・確認用ファイル</h2>
+                <p class="section-subtitle">納品済み、または確認待ちの動画を一覧で確認できます</p>
+            </div>
+        </div>
+        <div class="deliverable-list">
+            {% for deliverable in deliverables %}
+            <article class="deliverable-card">
+                <header class="deliverable-card-header">
+                    <div>
+                        <p class="client-project-label">{{ deliverable.company_name }}</p>
+                        <h3>{{ deliverable.project_name }}</h3>
+                        {% if deliverable.delivery_date %}
+                        <p class="delivery-meta">納品日: {{ deliverable.delivery_date }}</p>
+                        {% elif deliverable.due_date %}
+                        <p class="delivery-meta">予定納期: {{ deliverable.due_date }}</p>
+                        {% endif %}
+                    </div>
+                    <div class="deliverable-status">
+                        <span class="status-badge {{ deliverable.badge_class }}">{{ deliverable.approval_label }}</span>
+                    </div>
+                </header>
+                <div class="deliverable-progress">
+                    <span class="progress-label">進捗</span>
+                    <div class="progress-meter" style="--progress: {{ deliverable.progress or 0 }}%;">
+                        <div class="progress-meter-fill"></div>
+                    </div>
+                    <span class="progress-value">{{ deliverable.progress or 0 }}%</span>
+                </div>
+                {% if deliverable.assets %}
+                <div class="deliverable-assets">
+                    <p class="assets-title">共有ファイル</p>
+                    <ul class="asset-list">
+                        {% for asset in deliverable.assets %}
+                        <li class="asset-item">
+                            <div>
+                                <p class="asset-name">{{ asset.name }}</p>
+                                <p class="asset-meta">ver.{{ asset.version }} / {{ asset.size }} / {{ asset.uploaded_at }}</p>
+                            </div>
+                            <a href="{{ asset.download_url }}" class="btn btn-small btn-outline" target="_blank" rel="noopener">開く</a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% else %}
+                <p class="assets-empty">ファイル共有の準備中です。</p>
+                {% endif %}
+            </article>
+            {% else %}
+            <p class="empty-state">納品済みの動画はまだありません。進捗中の案件をお待ちください。</p>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="client-section" id="progress">
+        <div class="client-section-header">
+            <div>
+                <h2 class="section-title">納期・進捗トラッカー</h2>
+                <p class="section-subtitle">案件ごとの納期と最新のステータス更新履歴を確認できます</p>
+            </div>
+        </div>
+
+        <div class="client-alert-grid">
+            <article class="client-alert-card is-warning">
+                <p class="alert-title">納期が近い</p>
+                <p class="alert-value">{{ summary.due_soon_count }}</p>
+                <ul class="alert-list">
+                    {% if alerts.due_soon %}
+                        {% for item in alerts.due_soon[:3] %}
+                        <li>{{ item.project_name }}（残り{{ item.days_to_due }}日）</li>
+                        {% endfor %}
+                    {% else %}
+                        <li>対象案件はありません</li>
+                    {% endif %}
+                </ul>
+            </article>
+            <article class="client-alert-card is-danger">
+                <p class="alert-title">期限超過</p>
+                <p class="alert-value">{{ summary.overdue_count }}</p>
+                <ul class="alert-list">
+                    {% if alerts.overdue %}
+                        {% for item in alerts.overdue[:3] %}
+                        <li>{{ item.project_name }}（{{ item.days_to_due | abs }}日遅れ）</li>
+                        {% endfor %}
+                    {% else %}
+                        <li>期限超過の案件はありません</li>
+                    {% endif %}
+                </ul>
+            </article>
+        </div>
+
+        <div class="progress-list">
+            {% for entry in progress_entries %}
+            <article class="progress-card">
+                <header class="progress-card-header">
+                    <div>
+                        <p class="client-project-label">{{ entry.company_name }}</p>
+                        <h3>{{ entry.project_name }}</h3>
+                    </div>
+                    <span class="status-badge {{ entry.status_class }}">{{ entry.status }}</span>
+                </header>
+                <div class="progress-details">
+                    <div class="detail-block">
+                        <span class="detail-label">納期</span>
+                        {% if entry.due_date %}
+                        <span class="detail-value">
+                            {{ entry.due_date }}
+                            {% if entry.days_to_due is not none %}
+                                （
+                                {% if entry.days_to_due < 0 %}
+                                    {{ entry.days_to_due | abs }}日遅れ
+                                {% elif entry.days_to_due == 0 %}
+                                    本日
+                                {% else %}
+                                    残り{{ entry.days_to_due }}日
+                                {% endif %}
+                                ）
+                            {% endif %}
+                        </span>
+                        {% else %}
+                        <span class="detail-value muted">未設定</span>
+                        {% endif %}
+                    </div>
+                    <div class="detail-block">
+                        <span class="detail-label">進捗率</span>
+                        <span class="detail-value">{{ entry.progress or 0 }}%</span>
+                    </div>
+                    <div class="detail-block">
+                        <span class="detail-label">納品状況</span>
+                        <span class="detail-value">
+                            {% if entry.delivered %}
+                                納品済
+                            {% else %}
+                                {{ entry.status }}
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+                <div class="progress-meter" style="--progress: {{ entry.progress or 0 }}%;">
+                    <div class="progress-meter-fill"></div>
+                </div>
+                {% if entry.recent_history %}
+                <div class="status-history-chips">
+                    {% for history in entry.recent_history %}
+                    <span class="history-chip">
+                        <span class="history-status">{{ history.status }}</span>
+                        <span class="history-date">{{ history.changed_at }}</span>
+                    </span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </article>
+            {% else %}
+            <p class="empty-state">案件データがまだありません。</p>
+            {% endfor %}
+        </div>
+    </section>
+</div>
+{% endblock %}
+
