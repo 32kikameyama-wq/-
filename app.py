@@ -616,7 +616,11 @@ def role_required(*roles):
             current_user = getattr(g, 'current_user', None)
             if not current_user:
                 return redirect(url_for('login', next=request.path))
-            if current_user.get('role') not in roles:
+            role = current_user.get('role')
+            if role not in roles:
+                home_endpoint = get_default_home_endpoint(role)
+                if request.method == 'GET' and home_endpoint:
+                    return redirect(url_for(home_endpoint))
                 abort(403)
             return view_func(*args, **kwargs)
 
