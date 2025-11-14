@@ -698,9 +698,7 @@ def enforce_authentication():
 
     if current_user.get('role') == 'client':
         if not is_client_allowed_endpoint(endpoint_root):
-            if request.method == 'GET':
-                return redirect(url_for('client_dashboard'))
-            abort(403)
+            return redirect(url_for('client_dashboard'))
 
 
 @app.context_processor
