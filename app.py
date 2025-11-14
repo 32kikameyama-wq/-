@@ -4114,7 +4114,10 @@ def login():
         else:
             session['user_id'] = user['id']
             default_endpoint = get_default_home_endpoint(user.get('role'))
-            if user.get('role') == 'client':
+            role = (user.get('role') or '').lower()
+            if role == 'client':
+                return redirect(url_for(default_endpoint))
+            if role != 'admin':
                 return redirect(url_for(default_endpoint))
             return redirect(next_url or url_for(default_endpoint))
 
