@@ -34,7 +34,10 @@
                     <p class="summary-note">案件ごとの請求状況と入金ステータスを管理します。</p>
                 </div>
                 <div class="collapsible-actions">
-                    <button type="button" class="btn btn-primary" id="addInvoiceBtn">請求書を追加</button>
+                    <div class="finance-action-group">
+                        <button type="button" class="btn btn-primary" id="addInvoiceManualBtn">直接入力で追加</button>
+                        <button type="button" class="btn btn-outline" id="addInvoicePdfBtn">PDF取込</button>
+                    </div>
                 </div>
             </summary>
             <div class="collapsible-body">
@@ -47,6 +50,8 @@
                                 <th>金額</th>
                                 <th>発行日</th>
                                 <th>ステータス</th>
+                                <th>入力方法</th>
+                                <th>添付</th>
                                 <th class="actions-col">操作</th>
                             </tr>
                         </thead>
@@ -58,11 +63,29 @@
                                 data-project-name="{{ invoice.project_name|replace('\n', '&#10;')|e }}"
                                 data-amount="{{ invoice.amount }}"
                                 data-issue-date="{{ invoice.issue_date }}"
-                                data-status="{{ invoice.status }}">
+                                data-status="{{ invoice.status }}"
+                                data-input-source="{{ invoice.input_source }}"
+                                data-attachment-name="{{ invoice.attachment_name|replace('\n', '&#10;')|e }}"
+                                data-attachment-url="{{ invoice.attachment_url }}"
+                                data-notes="{{ invoice.notes|replace('\n', '&#10;')|e }}">
                                 <td>{{ invoice.project_name }}</td>
                                 <td>¥{{ "{:,}".format(invoice.amount) }}</td>
                                 <td>{{ invoice.issue_date or '---' }}</td>
                                 <td><span class="status-badge status-{{ invoice.status }}">{{ invoice.status_label }}</span></td>
+                                <td>
+                                    {% if invoice.input_source == 'pdf' %}
+                                    <span class="chip chip-pdf">PDF取込</span>
+                                    {% else %}
+                                    <span class="chip chip-manual">直接入力</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if invoice.attachment_url %}
+                                    <a href="{{ invoice.attachment_url }}" class="attachment-link" target="_blank" rel="noopener">PDF</a>
+                                    {% else %}
+                                    <span class="muted">---</span>
+                                    {% endif %}
+                                </td>
                                 <td class="actions-col">
                                     <div class="table-actions">
                                         <button type="button" class="btn btn-outline btn-sm invoice-edit-btn">編集</button>
@@ -88,7 +111,10 @@
                     <p class="summary-note">編集者ごとの支払予定・実績を管理します。</p>
                 </div>
                 <div class="collapsible-actions">
-                    <button type="button" class="btn btn-primary" id="addPayoutBtn">支払を追加</button>
+                    <div class="finance-action-group">
+                        <button type="button" class="btn btn-primary" id="addPayoutManualBtn">直接入力で追加</button>
+                        <button type="button" class="btn btn-outline" id="addPayoutPdfBtn">PDF取込</button>
+                    </div>
                 </div>
             </summary>
             <div class="collapsible-body">
@@ -101,6 +127,8 @@
                                 <th>案件名</th>
                                 <th>金額</th>
                                 <th>ステータス</th>
+                                <th>入力方法</th>
+                                <th>添付</th>
                                 <th class="actions-col">操作</th>
                             </tr>
                         </thead>
@@ -112,11 +140,29 @@
                                 data-editor="{{ payout.editor|replace('\n', '&#10;')|e }}"
                                 data-project-name="{{ payout.project_name|replace('\n', '&#10;')|e }}"
                                 data-amount="{{ payout.amount }}"
-                                data-status="{{ payout.status }}">
+                                data-status="{{ payout.status }}"
+                                data-input-source="{{ payout.input_source }}"
+                                data-attachment-name="{{ payout.attachment_name|replace('\n', '&#10;')|e }}"
+                                data-attachment-url="{{ payout.attachment_url }}"
+                                data-notes="{{ payout.notes|replace('\n', '&#10;')|e }}">
                                 <td>{{ payout.editor }}</td>
                                 <td>{{ payout.project_name }}</td>
                                 <td>¥{{ "{:,}".format(payout.amount) }}</td>
                                 <td><span class="status-badge status-{{ payout.status }}">{{ payout.status_label }}</span></td>
+                                <td>
+                                    {% if payout.input_source == 'pdf' %}
+                                    <span class="chip chip-pdf">PDF取込</span>
+                                    {% else %}
+                                    <span class="chip chip-manual">直接入力</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if payout.attachment_url %}
+                                    <a href="{{ payout.attachment_url }}" class="attachment-link" target="_blank" rel="noopener">PDF</a>
+                                    {% else %}
+                                    <span class="muted">---</span>
+                                    {% endif %}
+                                </td>
                                 <td class="actions-col">
                                     <div class="table-actions">
                                         <button type="button" class="btn btn-outline btn-sm payout-edit-btn">編集</button>
@@ -169,6 +215,10 @@
                         {% endfor %}
                     </select>
                 </div>
+                <div class="form-group">
+                    <label for="invoice_notes">メモ</label>
+                    <textarea id="invoice_notes" name="notes" rows="3" placeholder="自由入力"></textarea>
+                </div>
                 <div class="form-actions">
                     <span id="invoiceFormMessage" class="form-message"></span>
                     <div class="modal-buttons">
@@ -210,6 +260,10 @@
                         {% endfor %}
                     </select>
                 </div>
+                <div class="form-group">
+                    <label for="payout_notes">メモ</label>
+                    <textarea id="payout_notes" name="notes" rows="3" placeholder="自由入力"></textarea>
+                </div>
                 <div class="form-actions">
                     <span id="payoutFormMessage" class="form-message"></span>
                     <div class="modal-buttons">
@@ -221,4 +275,105 @@
         </div>
     </div>
 </div>
+
+<div id="invoiceUploadModal" class="gantt-modal finance-modal" aria-hidden="true" role="dialog" aria-labelledby="invoice-upload-modal-title">
+    <div class="modal-overlay" data-close-target="invoiceUploadModal"></div>
+    <div class="gantt-modal-content">
+        <header class="gantt-modal-header">
+            <h3 id="invoice-upload-modal-title">請求書PDFを取り込む</h3>
+            <button type="button" class="gantt-modal-close" data-close-target="invoiceUploadModal" aria-label="閉じる">×</button>
+        </header>
+        <div class="gantt-modal-body">
+            <form id="invoiceUploadForm" class="finance-form" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="invoice_upload_file">PDFファイル *</label>
+                    <input type="file" id="invoice_upload_file" name="attachment" accept="application/pdf">
+                    <p class="form-hint" id="invoiceUploadCurrentFile"></p>
+                </div>
+                <div class="form-group">
+                    <label for="invoice_upload_project">案件名 *</label>
+                    <input type="text" id="invoice_upload_project" name="project_name" required>
+                </div>
+                <div class="form-group">
+                    <label for="invoice_upload_amount">金額 (円) *</label>
+                    <input type="number" id="invoice_upload_amount" name="amount" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="invoice_upload_issue_date">発行日</label>
+                    <input type="date" id="invoice_upload_issue_date" name="issue_date">
+                </div>
+                <div class="form-group">
+                    <label for="invoice_upload_status">ステータス</label>
+                    <select id="invoice_upload_status" name="status">
+                        {% for status in invoice_status_options %}
+                        <option value="{{ status.value }}">{{ status.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="invoice_upload_notes">メモ</label>
+                    <textarea id="invoice_upload_notes" name="notes" rows="3"></textarea>
+                </div>
+                <div class="form-actions">
+                    <span id="invoiceUploadFormMessage" class="form-message"></span>
+                    <div class="modal-buttons">
+                        <button type="button" class="btn btn-outline" data-close-target="invoiceUploadModal">キャンセル</button>
+                        <button type="submit" class="btn btn-primary">アップロード</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div id="payoutUploadModal" class="gantt-modal finance-modal" aria-hidden="true" role="dialog" aria-labelledby="payout-upload-modal-title">
+    <div class="modal-overlay" data-close-target="payoutUploadModal"></div>
+    <div class="gantt-modal-content">
+        <header class="gantt-modal-header">
+            <h3 id="payout-upload-modal-title">支払PDFを取り込む</h3>
+            <button type="button" class="gantt-modal-close" data-close-target="payoutUploadModal" aria-label="閉じる">×</button>
+        </header>
+        <div class="gantt-modal-body">
+            <form id="payoutUploadForm" class="finance-form" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="payout_upload_file">PDFファイル *</label>
+                    <input type="file" id="payout_upload_file" name="attachment" accept="application/pdf">
+                    <p class="form-hint" id="payoutUploadCurrentFile"></p>
+                </div>
+                <div class="form-group">
+                    <label for="payout_upload_editor">編集者 *</label>
+                    <input type="text" id="payout_upload_editor" name="editor" required>
+                </div>
+                <div class="form-group">
+                    <label for="payout_upload_project">案件名 *</label>
+                    <input type="text" id="payout_upload_project" name="project_name" required>
+                </div>
+                <div class="form-group">
+                    <label for="payout_upload_amount">金額 (円) *</label>
+                    <input type="number" id="payout_upload_amount" name="amount" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="payout_upload_status">ステータス</label>
+                    <select id="payout_upload_status" name="status">
+                        {% for status in payout_status_options %}
+                        <option value="{{ status.value }}">{{ status.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="payout_upload_notes">メモ</label>
+                    <textarea id="payout_upload_notes" name="notes" rows="3"></textarea>
+                </div>
+                <div class="form-actions">
+                    <span id="payoutUploadFormMessage" class="form-message"></span>
+                    <div class="modal-buttons">
+                        <button type="button" class="btn btn-outline" data-close-target="payoutUploadModal">キャンセル</button>
+                        <button type="submit" class="btn btn-primary">アップロード</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 {% endblock %}

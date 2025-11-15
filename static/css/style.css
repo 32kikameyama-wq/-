@@ -1096,6 +1096,46 @@ section h3 {
     gap: 8px;
 }
 
+.finance-action-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.8em;
+    font-weight: 600;
+    border: 1px solid #000;
+}
+
+.chip-manual {
+    background: #fff6d1;
+    color: #7c4a05;
+}
+
+.chip-pdf {
+    background: #e0f1ff;
+    color: #0b5394;
+}
+
+.attachment-link {
+    color: #0b5394;
+    font-weight: 600;
+    text-decoration: underline;
+}
+
+.attachment-link:hover {
+    color: #063763;
+}
+
+.muted {
+    color: #97a0af;
+}
+
 .finance-modal .gantt-modal-content {
     max-width: 460px;
 }
@@ -1114,7 +1154,8 @@ section h3 {
 }
 
 .finance-form input,
-.finance-form select {
+.finance-form select,
+.finance-form textarea {
     border: 1px solid #000;
     border-radius: 8px;
     padding: 10px 12px;
@@ -1123,7 +1164,8 @@ section h3 {
 }
 
 .finance-form input:focus,
-.finance-form select:focus {
+.finance-form select:focus,
+.finance-form textarea:focus {
     outline: 2px solid #a8d3ff;
     outline-offset: 1px;
 }
@@ -1134,6 +1176,11 @@ section h3 {
     align-items: center;
     gap: 16px;
     margin-top: 10px;
+}
+
+.finance-form .form-hint {
+    font-size: 0.8em;
+    color: #5c677d;
 }
 
 /* レポート・設定カード */

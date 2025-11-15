@@ -161,14 +161,74 @@ FINANCE_INVOICE_STATUS_LABELS = {value: label for value, label in FINANCE_INVOIC
 FINANCE_PAYOUT_STATUS_LABELS = {value: label for value, label in FINANCE_PAYOUT_STATUS_DEFINITIONS}
 
 FINANCE_INVOICES = [
-    {'id': 1, 'project_name': 'WebCM制作プロジェクトA', 'amount': 500000, 'status': 'paid', 'issue_date': '2025-01-20'},
-    {'id': 2, 'project_name': '企業紹介動画制作', 'amount': 800000, 'status': 'issued', 'issue_date': '2025-02-01'},
-    {'id': 3, 'project_name': 'SNS用ショート動画', 'amount': 200000, 'status': 'paid', 'issue_date': '2024-12-15'},
+    {
+        'id': 1,
+        'project_name': 'WebCM制作プロジェクトA',
+        'amount': 500000,
+        'status': 'paid',
+        'issue_date': '2025-01-20',
+        'input_source': 'manual',
+        'attachment_path': '',
+        'attachment_name': '',
+        'notes': ''
+    },
+    {
+        'id': 2,
+        'project_name': '企業紹介動画制作',
+        'amount': 800000,
+        'status': 'issued',
+        'issue_date': '2025-02-01',
+        'input_source': 'manual',
+        'attachment_path': '',
+        'attachment_name': '',
+        'notes': ''
+    },
+    {
+        'id': 3,
+        'project_name': 'SNS用ショート動画',
+        'amount': 200000,
+        'status': 'paid',
+        'issue_date': '2024-12-15',
+        'input_source': 'manual',
+        'attachment_path': '',
+        'attachment_name': '',
+        'notes': ''
+    },
 ]
 FINANCE_PAYOUTS = [
-    {'id': 1, 'editor': '田中', 'amount': 300000, 'project_name': 'WebCM制作プロジェクトA', 'status': 'paid'},
-    {'id': 2, 'editor': '佐藤', 'amount': 250000, 'project_name': '企業紹介動画制作', 'status': 'pending'},
-    {'id': 3, 'editor': '鈴木', 'amount': 150000, 'project_name': 'SNS用ショート動画', 'status': 'paid'},
+    {
+        'id': 1,
+        'editor': '田中',
+        'amount': 300000,
+        'project_name': 'WebCM制作プロジェクトA',
+        'status': 'paid',
+        'input_source': 'manual',
+        'attachment_path': '',
+        'attachment_name': '',
+        'notes': ''
+    },
+    {
+        'id': 2,
+        'editor': '佐藤',
+        'amount': 250000,
+        'project_name': '企業紹介動画制作',
+        'status': 'pending',
+        'input_source': 'manual',
+        'attachment_path': '',
+        'attachment_name': '',
+        'notes': ''
+    },
+    {
+        'id': 3,
+        'editor': '鈴木',
+        'amount': 150000,
+        'project_name': 'SNS用ショート動画',
+        'status': 'paid',
+        'input_source': 'manual',
+        'attachment_path': '',
+        'attachment_name': '',
+        'notes': ''
+    },
 ]
 
 FINANCE_INVOICE_ID_COUNTER = count(start=len(FINANCE_INVOICES) + 1)
@@ -176,6 +236,47 @@ FINANCE_PAYOUT_ID_COUNTER = count(start=len(FINANCE_PAYOUTS) + 1)
 
 REPORT_PDF_FONT_NAME = 'HeiseiKakuGo-W5'
 REPORT_PDF_FONT_REGISTERED = False
+FINANCE_UPLOAD_BASE = os.path.join(BASE_DIR, 'uploads', 'finance')
+FINANCE_INVOICE_UPLOAD_FOLDER = os.path.join(FINANCE_UPLOAD_BASE, 'invoices')
+FINANCE_PAYOUT_UPLOAD_FOLDER = os.path.join(FINANCE_UPLOAD_BASE, 'payouts')
+os.makedirs(FINANCE_INVOICE_UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(FINANCE_PAYOUT_UPLOAD_FOLDER, exist_ok=True)
+ALLOWED_FINANCE_ATTACHMENT_EXTENSIONS = {'.pdf'}
+
+
+def get_finance_upload_folder(kind: str):
+    if kind == 'invoice':
+        return FINANCE_INVOICE_UPLOAD_FOLDER
+    if kind == 'payout':
+        return FINANCE_PAYOUT_UPLOAD_FOLDER
+    return None
+
+
+def save_finance_attachment(file_storage, kind: str):
+    if not file_storage or not file_storage.filename:
+        return None, None
+    filename = secure_filename(file_storage.filename)
+    extension = os.path.splitext(filename)[1].lower()
+    if extension not in ALLOWED_FINANCE_ATTACHMENT_EXTENSIONS:
+        raise ValueError('PDFファイルのみアップロードできます。')
+    folder = get_finance_upload_folder(kind)
+    if not folder:
+        raise ValueError('保存先ディレクトリが見つかりません。')
+    stored_name = f"{uuid4().hex}{extension}"
+    file_path = os.path.join(folder, stored_name)
+    file_storage.save(file_path)
+    return stored_name, filename
+
+
+def delete_finance_attachment(kind: str, stored_name: str | None):
+    if not stored_name:
+        return
+    folder = get_finance_upload_folder(kind)
+    if not folder:
+        return
+    file_path = os.path.join(folder, stored_name)
+    if os.path.exists(file_path):
+        os.remove(file_path)
 
 
 EDITOR_SHARED_SETTINGS = {}
@@ -3043,24 +3144,42 @@ def get_next_payout_id():
 
 
 def serialize_invoice(invoice: dict) -> dict:
+    attachment_path = invoice.get('attachment_path', '')
+    attachment_url = ''
+    if attachment_path and has_request_context():
+        attachment_url = url_for('download_finance_attachment', kind='invoice', filename=attachment_path)
     return {
         'id': invoice['id'],
         'project_name': invoice['project_name'],
         'amount': invoice['amount'],
         'issue_date': invoice.get('issue_date', ''),
         'status': invoice['status'],
-        'status_label': FINANCE_INVOICE_STATUS_LABELS.get(invoice['status'], invoice['status'])
+        'status_label': FINANCE_INVOICE_STATUS_LABELS.get(invoice['status'], invoice['status']),
+        'input_source': invoice.get('input_source', 'manual'),
+        'attachment_path': attachment_path,
+        'attachment_name': invoice.get('attachment_name', ''),
+        'attachment_url': attachment_url,
+        'notes': invoice.get('notes', '')
     }
 
 
 def serialize_payout(payout: dict) -> dict:
+    attachment_path = payout.get('attachment_path', '')
+    attachment_url = ''
+    if attachment_path and has_request_context():
+        attachment_url = url_for('download_finance_attachment', kind='payout', filename=attachment_path)
     return {
         'id': payout['id'],
         'editor': payout['editor'],
         'project_name': payout['project_name'],
         'amount': payout['amount'],
         'status': payout['status'],
-        'status_label': FINANCE_PAYOUT_STATUS_LABELS.get(payout['status'], payout['status'])
+        'status_label': FINANCE_PAYOUT_STATUS_LABELS.get(payout['status'], payout['status']),
+        'input_source': payout.get('input_source', 'manual'),
+        'attachment_path': attachment_path,
+        'attachment_name': payout.get('attachment_name', ''),
+        'attachment_url': attachment_url,
+        'notes': payout.get('notes', '')
     }
 
 
@@ -3332,6 +3451,85 @@ def validate_payout_payload(data: dict) -> tuple[dict, list[str]]:
     return payload, errors
 
 
+def is_multipart_request() -> bool:
+    content_type = (request.content_type or '').lower()
+    return 'multipart/form-data' in content_type
+
+
+def extract_invoice_submission(existing_invoice: dict | None = None):
+    if is_multipart_request():
+        raw_data = request.form.to_dict()
+    else:
+        raw_data = request.get_json(silent=True) or {}
+
+    payload, errors = validate_invoice_payload(raw_data)
+    payload['notes'] = (raw_data.get('notes') or '').strip()
+    input_source = (raw_data.get('input_source') or '').strip()
+    payload['input_source'] = input_source or ('pdf' if is_multipart_request() else 'manual')
+    payload['attachment_path'] = existing_invoice.get('attachment_path', '') if existing_invoice else ''
+    payload['attachment_name'] = existing_invoice.get('attachment_name', '') if existing_invoice else ''
+
+    if is_multipart_request():
+        file_storage = request.files.get('attachment')
+        if file_storage and file_storage.filename:
+            try:
+                stored_name, original_name = save_finance_attachment(file_storage, 'invoice')
+                if existing_invoice and existing_invoice.get('attachment_path'):
+                    delete_finance_attachment('invoice', existing_invoice['attachment_path'])
+                payload['attachment_path'] = stored_name or ''
+                payload['attachment_name'] = original_name or ''
+                payload['input_source'] = 'pdf'
+            except ValueError as exc:
+                errors.append(str(exc))
+        elif not existing_invoice:
+            errors.append('PDFファイルを選択してください。')
+    else:
+        attachment_path = raw_data.get('attachment_path')
+        attachment_name = raw_data.get('attachment_name')
+        if attachment_path:
+            payload['attachment_path'] = attachment_path
+        if attachment_name:
+            payload['attachment_name'] = attachment_name
+    return payload, errors
+
+
+def extract_payout_submission(existing_payout: dict | None = None):
+    if is_multipart_request():
+        raw_data = request.form.to_dict()
+    else:
+        raw_data = request.get_json(silent=True) or {}
+
+    payload, errors = validate_payout_payload(raw_data)
+    payload['notes'] = (raw_data.get('notes') or '').strip()
+    input_source = (raw_data.get('input_source') or '').strip()
+    payload['input_source'] = input_source or ('pdf' if is_multipart_request() else 'manual')
+    payload['attachment_path'] = existing_payout.get('attachment_path', '') if existing_payout else ''
+    payload['attachment_name'] = existing_payout.get('attachment_name', '') if existing_payout else ''
+
+    if is_multipart_request():
+        file_storage = request.files.get('attachment')
+        if file_storage and file_storage.filename:
+            try:
+                stored_name, original_name = save_finance_attachment(file_storage, 'payout')
+                if existing_payout and existing_payout.get('attachment_path'):
+                    delete_finance_attachment('payout', existing_payout['attachment_path'])
+                payload['attachment_path'] = stored_name or ''
+                payload['attachment_name'] = original_name or ''
+                payload['input_source'] = 'pdf'
+            except ValueError as exc:
+                errors.append(str(exc))
+        elif not existing_payout:
+            errors.append('PDFファイルを選択してください。')
+    else:
+        attachment_path = raw_data.get('attachment_path')
+        attachment_name = raw_data.get('attachment_name')
+        if attachment_path:
+            payload['attachment_path'] = attachment_path
+        if attachment_name:
+            payload['attachment_name'] = attachment_name
+    return payload, errors
+
+
 def get_invoice_by_id(invoice_id: int) -> dict | None:
     return next((invoice for invoice in FINANCE_INVOICES if invoice['id'] == invoice_id), None)
 
@@ -3359,12 +3557,21 @@ def finance():
     )
 
 
+@app.route('/finance/attachments/<kind>/<path:filename>')
+@login_required
+@role_required('admin')
+def download_finance_attachment(kind, filename):
+    folder = get_finance_upload_folder(kind)
+    if not folder:
+        abort(404)
+    return send_from_directory(folder, filename, as_attachment=True)
+
+
 @app.route('/api/finance/invoices', methods=['POST'])
 @login_required
 @role_required('admin')
 def api_create_invoice():
-    data = request.get_json(silent=True) or {}
-    payload, errors = validate_invoice_payload(data)
+    payload, errors = extract_invoice_submission()
     if errors:
         return jsonify({'status': 'error', 'message': ' / '.join(errors)}), 400
 
@@ -3392,8 +3599,7 @@ def api_update_invoice(invoice_id):
     if not invoice:
         return jsonify({'status': 'error', 'message': '請求が見つかりません'}), 404
 
-    data = request.get_json(silent=True) or {}
-    payload, errors = validate_invoice_payload(data)
+    payload, errors = extract_invoice_submission(existing_invoice=invoice)
     if errors:
         return jsonify({'status': 'error', 'message': ' / '.join(errors)}), 400
 
@@ -3413,8 +3619,7 @@ def api_update_invoice(invoice_id):
 @login_required
 @role_required('admin')
 def api_create_payout():
-    data = request.get_json(silent=True) or {}
-    payload, errors = validate_payout_payload(data)
+    payload, errors = extract_payout_submission()
     if errors:
         return jsonify({'status': 'error', 'message': ' / '.join(errors)}), 400
 
@@ -3442,8 +3647,7 @@ def api_update_payout(payout_id):
     if not payout:
         return jsonify({'status': 'error', 'message': '支払が見つかりません'}), 404
 
-    data = request.get_json(silent=True) or {}
-    payload, errors = validate_payout_payload(data)
+    payload, errors = extract_payout_submission(existing_payout=payout)
     if errors:
         return jsonify({'status': 'error', 'message': ' / '.join(errors)}), 400
 
