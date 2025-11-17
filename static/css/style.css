@@ -3252,6 +3252,16 @@ section h3 {
     text-align: right;
 }
 
+.text-muted {
+    color: #999;
+    font-style: italic;
+}
+
+.users-table .btn-sm {
+    padding: 4px 12px;
+    font-size: 0.85em;
+}
+
 @media (max-width: 1024px) {
     .users-grid {
         grid-template-columns: 1fr;

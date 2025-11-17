@@ -474,6 +474,22 @@ def create_user(name, email, role, password_hash, active):
     return get_user_by_email(email)
 
 
+def delete_user(user_id: int):
+    """ユーザーを削除する（関連するeditor_workspacesも削除）"""
+    if not user_id:
+        return False
+    user = get_user_by_id(user_id)
+    if not user:
+        return False
+    
+    # 関連するeditor_workspaceを削除
+    execute("delete from app.editor_workspaces where user_id=:user_id", user_id=user_id)
+    
+    # ユーザーを削除
+    execute("delete from app.users where id=:user_id", user_id=user_id)
+    return True
+
+
 def create_editor_workspace_for_user(user):
     workspace = build_base_editor_workspace()
     execute(
@@ -691,6 +707,27 @@ ensure_tables()
 load_editor_shared_settings()
 ensure_default_users()
 ensure_default_training_videos()
+
+# テストユーザー（1, 2, 5）を削除（初回のみ実行）
+def cleanup_test_users_on_startup():
+    """アプリケーション起動時にテストユーザーを削除"""
+    test_user_ids = [1, 2, 5]
+    for user_id in test_user_ids:
+        user = get_user_by_id(user_id)
+        if user:
+            # テストユーザーかどうかを確認
+            email = user.get('email', '').lower()
+            name = user.get('name', '')
+            if email in ['admin@example.com', 'editor@example.com'] or 'テスト' in name or email == '32ki@gmail.com':
+                try:
+                    delete_user(user_id)
+                    print(f"[startup] Deleted test user {user_id}: {name} ({email})")
+                except Exception as e:
+                    print(f"[startup] Failed to delete user {user_id}: {e}")
+
+# 初回起動時のみ実行（環境変数で制御可能）
+if os.getenv('CLEANUP_TEST_USERS', 'true').lower() == 'true':
+    cleanup_test_users_on_startup()
 
 # 認証/認可ユーティリティ
 
@@ -3848,52 +3885,77 @@ def admin_users():
     form_data = {}
 
     if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        email = request.form.get('email', '').strip().lower()
-        role = request.form.get('role', 'editor').strip().lower()
-        password = request.form.get('password', '').strip()
-        active = request.form.get('active') == 'on'
+        # 削除リクエストの処理
+        if request.form.get('action') == 'delete':
+            user_id = request.form.get('user_id')
+            if user_id:
+                try:
+                    user_id_int = int(user_id)
+                    current_user_id = g.current_user.get('id') if g.current_user else None
+                    
+                    # 自分自身は削除できない
+                    if user_id_int == current_user_id:
+                        error = '自分自身を削除することはできません。'
+                    else:
+                        user = get_user_by_id(user_id_int)
+                        if user:
+                            if delete_user(user_id_int):
+                                success = f'ユーザー「{user.get("name")}」を削除しました。'
+                            else:
+                                error = 'ユーザーの削除に失敗しました。'
+                        else:
+                            error = 'ユーザーが見つかりません。'
+                except (ValueError, TypeError):
+                    error = '無効なユーザーIDです。'
+        
+        # 新規ユーザー作成の処理
+        elif request.form.get('action') != 'delete':
+            name = request.form.get('name', '').strip()
+            email = request.form.get('email', '').strip().lower()
+            role = request.form.get('role', 'editor').strip().lower()
+            password = request.form.get('password', '').strip()
+            active = request.form.get('active') == 'on'
 
-        form_data = {
-            'name': name,
-            'email': email,
-            'role': role,
-            'active': active
-        }
+            form_data = {
+                'name': name,
+                'email': email,
+                'role': role,
+                'active': active
+            }
 
-        allowed_roles = {'admin', 'editor', 'client'}
-        if role not in allowed_roles:
-            role = 'editor'
+            allowed_roles = {'admin', 'editor', 'client'}
+            if role not in allowed_roles:
+                role = 'editor'
 
-        errors = []
-        if not name:
-            errors.append('氏名は必須です。')
-        if not email:
-            errors.append('メールアドレスは必須です。')
-        elif get_user_by_email(email):
-            errors.append('このメールアドレスは既に登録されています。')
-        if not password or len(password) < 6:
-            errors.append('パスワードは6文字以上で入力してください。')
+            errors = []
+            if not name:
+                errors.append('氏名は必須です。')
+            if not email:
+                errors.append('メールアドレスは必須です。')
+            elif get_user_by_email(email):
+                errors.append('このメールアドレスは既に登録されています。')
+            if not password or len(password) < 6:
+                errors.append('パスワードは6文字以上で入力してください。')
 
-        if errors:
-            error = '\n'.join(errors)
-        else:
-            new_user = create_user(
-                name=name,
-                email=email,
-                role=role,
-                password_hash=hash_password(password),
-                active=active
-            )
-            workspace_message = ''
-            if new_user['role'] == 'editor':
-                create_editor_workspace_for_user(new_user)
-                workspace_message = ' 編集者用共有ページも自動生成されました。'
-            elif new_user['role'] == 'client':
-                ensure_client_portal_profile(new_user)
-                workspace_message = ' クライアント専用ポータルが割り当てられました。'
-            success = f'ユーザーを作成しました。初期パスワードを共有してください。{workspace_message}'
-            form_data = {}
+            if errors:
+                error = '\n'.join(errors)
+            else:
+                new_user = create_user(
+                    name=name,
+                    email=email,
+                    role=role,
+                    password_hash=hash_password(password),
+                    active=active
+                )
+                workspace_message = ''
+                if new_user['role'] == 'editor':
+                    create_editor_workspace_for_user(new_user)
+                    workspace_message = ' 編集者用共有ページも自動生成されました。'
+                elif new_user['role'] == 'client':
+                    ensure_client_portal_profile(new_user)
+                    workspace_message = ' クライアント専用ポータルが割り当てられました。'
+                success = f'ユーザーを作成しました。初期パスワードを共有してください。{workspace_message}'
+                form_data = {}
 
     return render_template(
         'admin/users.html',
@@ -3901,8 +3963,46 @@ def admin_users():
         role_labels=ROLE_LABELS,
         error=error,
         success=success,
-        form_data=form_data
+        form_data=form_data,
+        current_user_id=g.current_user.get('id') if g.current_user else None
     )
+
+
+@app.route('/admin/users/cleanup-test-users', methods=['POST'])
+@login_required
+@role_required('admin')
+def cleanup_test_users():
+    """テストユーザー（1, 2, 5）を削除する一時的なエンドポイント"""
+    test_user_ids = [1, 2, 5]
+    current_user_id = g.current_user.get('id') if g.current_user else None
+    deleted_count = 0
+    errors = []
+    
+    for user_id in test_user_ids:
+        if user_id == current_user_id:
+            errors.append(f'ユーザーID {user_id}: 自分自身を削除することはできません。')
+            continue
+        
+        user = get_user_by_id(user_id)
+        if user:
+            if delete_user(user_id):
+                deleted_count += 1
+            else:
+                errors.append(f'ユーザーID {user_id} ({user.get("name")}): 削除に失敗しました。')
+        else:
+            errors.append(f'ユーザーID {user_id}: ユーザーが見つかりません。')
+    
+    if errors:
+        return jsonify({
+            'status': 'partial',
+            'message': f'{deleted_count}件のユーザーを削除しました。',
+            'errors': errors
+        })
+    else:
+        return jsonify({
+            'status': 'success',
+            'message': f'{deleted_count}件のユーザーを削除しました。'
+        })
 
 def get_training_videos_for_portal(user, include_watchers=False):
     videos = fetch_all(
