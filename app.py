@@ -2700,21 +2700,21 @@ def api_update_task(task_id):
             if dep_type not in TASK_DEPENDENCY_TYPES:
                 dep_type = 'FS'
             normalized.append({'task_id': int(dep_id), 'type': dep_type})
-        record_task_history(task, 'dependencies', task.get('dependencies', []), normalized, actor)
-        task['dependencies'] = normalized
+            record_task_history(task, 'dependencies', task.get('dependencies', []), normalized, actor)
+            task['dependencies'] = normalized
 
-    update_task_metadata(task, actor)
-    if task.get('task_origin') == 'auto':
-        task['user_modified'] = True
+        update_task_metadata(task, actor)
+        if task.get('task_origin') == 'auto':
+            task['user_modified'] = True
 
-    GENERAL_TASKS.sort(key=lambda t: (t.get('due_date') or '', t.get('id')))
-    rebuild_task_cache()
-    
-    return jsonify({
-        'status': 'success',
-        'message': 'タスクを更新しました',
-        'data': task
-    })
+        GENERAL_TASKS.sort(key=lambda t: (t.get('due_date') or '', t.get('id')))
+        rebuild_task_cache()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'タスクを更新しました',
+            'data': task
+        })
 
 @app.route('/api/tasks', methods=['POST'])
 @login_required
