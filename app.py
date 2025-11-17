@@ -988,7 +988,6 @@ CLIENT_FINAL_ASSET_KINDS = {'final', 'delivery', '納品', 'complete', 'final_cu
 CLIENT_PORTAL_PROFILES: dict[int, dict] = {}
 
 TASK_ID_COUNTER = count(20000)
-PROJECT_GANTT_TASKS: dict[int, list[dict]] = {}
 GENERAL_TASKS: list[dict] = []
 TASK_CACHE: list[dict] = []
 
@@ -1075,175 +1074,9 @@ def ensure_project_color(company_id: int, project: dict) -> str:
     return color
 
 
-def build_auto_gantt_tasks(project: dict, company_name: str, color: str):
-    axis = project.get('video_axis', 'LONG')
-    stage_templates = []
-    for template in AUTO_STAGE_TEMPLATES:
-        tpl = template.copy()
-        if tpl['key'] == 'edit':
-            tpl['duration'] = 5 if axis == 'LONG' else 3
-        if tpl['key'] == 'delivery':
-            tpl['duration'] = 1 if project.get('delivered') else tpl['duration']
-        stage_templates.append(tpl)
-
-    default_due = datetime.now().date() + timedelta(days=21)
-    due_date = parse_iso_date(project.get('due_date'), default_due)
-    if due_date < datetime.now().date():
-        due_date = datetime.now().date() + timedelta(days=3)
-
-    stages = []
-    cursor = due_date
-    for template in reversed(stage_templates):
-        duration = max(1, template['duration'])
-        stage_end = cursor
-        stage_start = cursor - timedelta(days=duration - 1)
-        if stage_start > stage_end:
-            stage_start = stage_end
-        stages.append({
-            'key': template['key'],
-            'title': template['title'],
-            'plan_start': stage_start,
-            'plan_end': stage_end,
-            'duration': duration
-        })
-        cursor = stage_start - timedelta(days=1)
-    stages.reverse()
-
-    stage_order = {stage['key']: idx for idx, stage in enumerate(stages)}
-    status_stage_map = {
-        '計画中': 'plan',
-        '進行中': 'edit',
-        'レビュー中': 'review',
-        '納品待ち': 'delivery',
-        '完了': 'delivery'
-    }
-    current_stage_key = status_stage_map.get(project.get('status'), 'edit')
-    if project.get('delivered'):
-        current_stage_key = 'delivery'
-    current_index = stage_order.get(current_stage_key, 2)
-
-    auto_tasks = []
-    previous_task_id = None
-
-    for idx, stage in enumerate(stages):
-        task_id = project['id'] * 100 + (idx + 1)
-        if project.get('delivered') or project.get('status') == '完了':
-            status = '完了'
-        elif idx < current_index:
-            status = '完了'
-        elif idx == current_index:
-            status = 'レビュー中' if stage['key'] == 'review' and project.get('status') == 'レビュー中' else '進行中'
-        else:
-            status = '未着手'
-
-        if status == '完了':
-            progress = 100
-        elif status == 'レビュー中':
-            progress = 80
-        elif status == '進行中':
-            progress = 60
-        else:
-            progress = 0
-
-        plan_start = isoformat_date(stage['plan_start'])
-        plan_end = isoformat_date(stage['plan_end'])
-
-        if status == '完了':
-            actual_start = plan_start
-            actual_end = plan_end
-        elif status in {'レビュー中', '進行中'}:
-            actual_start = plan_start
-            actual_end = ''
-        else:
-            actual_start = ''
-            actual_end = ''
-
-        dependencies = []
-        if previous_task_id:
-            dependencies.append({'task_id': previous_task_id, 'type': 'FS'})
-
-        task = {
-            'id': task_id,
-            'title': stage['title'],
-            'project_id': project['id'],
-            'project_name': project.get('name'),
-            'company_name': company_name,
-            'color': color,
-            'type': 'AUTO',
-            'status': status,
-            'assignee': project.get('assignee', '未割当'),
-            'priority': '高' if idx <= 2 else '中',
-            'progress': progress,
-            'due_date': plan_end,
-            'plan_start': plan_start,
-            'plan_end': plan_end,
-            'actual_start': actual_start,
-            'actual_end': actual_end,
-            'order_index': idx + 1,
-            'dependencies': dependencies,
-            'created_by': 'システム',
-            'updated_by': 'システム',
-            'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
-            'notes': f"{project.get('video_axis', 'LONG')} / {project.get('status', '-')}",
-            'history': [],
-            'task_origin': 'auto',
-            'auto_stage': stage['key'],
-            'auto_generated_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
-            'user_modified': False
-        }
-        auto_tasks.append(task)
-        previous_task_id = task_id
-
-    return auto_tasks
-
-
-def initialize_project_gantt_tasks(project: dict, company_name: str, company_id: int):
-    project_id = project['id']
-    project.setdefault('company_id', company_id)
-    project.setdefault('company_name', company_name)
-    project_color = ensure_project_color(company_id, project)
-    ensure_project_status_history(project)
-    project_tasks = PROJECT_GANTT_TASKS.setdefault(project_id, [])
-    existing_auto = {task.get('auto_stage'): task for task in project_tasks if task.get('task_origin') == 'auto'}
-    generated = build_auto_gantt_tasks(project, company_name, project_color)
-
-    seen_stages = set()
-    for auto_task in generated:
-        stage = auto_task['auto_stage']
-        seen_stages.add(stage)
-        if stage in existing_auto:
-            existing = existing_auto[stage]
-            existing.update({
-                'project_name': auto_task['project_name'],
-                'company_name': auto_task['company_name'],
-                'color': project_color,
-                'plan_start': auto_task['plan_start'],
-                'plan_end': auto_task['plan_end'],
-                'due_date': auto_task['due_date'],
-                'dependencies': auto_task['dependencies'],
-                'order_index': auto_task['order_index'],
-                'auto_generated_at': auto_task['auto_generated_at'],
-                'assignee': auto_task['assignee']
-            })
-            if not existing.get('user_modified'):
-                existing['status'] = auto_task['status']
-                existing['progress'] = auto_task['progress']
-                existing['actual_start'] = auto_task['actual_start']
-                existing['actual_end'] = auto_task['actual_end']
-            existing.setdefault('task_origin', 'auto')
-            existing.setdefault('history', [])
-        else:
-            project_tasks.append(auto_task)
-
-    project_tasks[:] = sorted(project_tasks, key=lambda t: (t.get('order_index') or 9999, t.get('id')))
-
-
 def rebuild_task_cache():
     global TASK_CACHE
     tasks = []
-    for project_id in sorted(PROJECT_GANTT_TASKS.keys()):
-        for task in PROJECT_GANTT_TASKS[project_id]:
-            tasks.append(copy.deepcopy(task))
     tasks.extend(copy.deepcopy(GENERAL_TASKS))
     TASK_CACHE = tasks
 
@@ -1256,24 +1089,17 @@ def get_all_tasks():
 
 def gather_project_tasks():
     tasks = []
-    for project_id, project_tasks in PROJECT_GANTT_TASKS.items():
-        for task in project_tasks:
-            tasks.append(copy.deepcopy(task))
     for task in GENERAL_TASKS:
         tasks.append(copy.deepcopy(task))
     return tasks
 
 
 def get_project_tasks(project_id: int):
-    tasks = PROJECT_GANTT_TASKS.get(project_id, [])
+    tasks = [task for task in GENERAL_TASKS if task.get('project_id') == project_id]
     return copy.deepcopy(sorted(tasks, key=lambda t: (t.get('order_index') or 9999, t.get('id'))))
 
 
 def find_task_with_container(task_id: int):
-    for project_id, tasks in PROJECT_GANTT_TASKS.items():
-        for task in tasks:
-            if task.get('id') == task_id:
-                return task, tasks
     for task in GENERAL_TASKS:
         if task.get('id') == task_id:
             return task, GENERAL_TASKS
@@ -1282,10 +1108,6 @@ def find_task_with_container(task_id: int):
 
 def initialize_all_project_tasks():
     PROJECT_COLOR_ASSIGNMENTS.clear()
-    for company in SAMPLE_COMPANIES:
-        for project in company['projects']:
-            project.setdefault('company_id', company['id'])
-            initialize_project_gantt_tasks(project, company['name'], company['id'])
     rebuild_task_cache()
 
 
@@ -1717,39 +1539,6 @@ def build_client_portal_context(current_user):
     }
 
 
-def serialize_gantt_task(task: dict):
-    dependencies = task.get('dependencies', [])
-    dependencies_string = ",".join(str(dep.get('task_id')) for dep in dependencies if dep.get('task_id'))
-    return {
-        'id': task.get('id'),
-        'name': task.get('title'),
-        'title': task.get('title'),
-        'project_id': task.get('project_id'),
-        'project_name': task.get('project_name'),
-        'company_name': task.get('company_name'),
-        'auto_stage': task.get('auto_stage'),
-        'assignee': task.get('assignee'),
-        'status': task.get('status'),
-        'priority': task.get('priority'),
-        'type': task.get('type'),
-        'progress': int(task.get('progress', 0) or 0),
-        'plan_start': task.get('plan_start'),
-        'plan_end': task.get('plan_end'),
-        'actual_start': task.get('actual_start'),
-        'actual_end': task.get('actual_end'),
-        'due_date': task.get('due_date'),
-        'order_index': task.get('order_index'),
-        'dependencies': dependencies,
-        'dependencies_string': dependencies_string,
-        'notes': task.get('notes', ''),
-        'updated_at': task.get('updated_at'),
-        'updated_by': task.get('updated_by'),
-        'created_by': task.get('created_by'),
-        'history': task.get('history', [])[:10],  # 最新10件まで
-        'task_origin': task.get('task_origin', 'manual')
-    }
-
-
 def filter_tasks_for_user(tasks: list, current_user: dict):
     if not current_user:
         return []
@@ -1821,105 +1610,6 @@ def collect_task_filters(tasks: list):
     }
 
 
-def summarize_projects_for_gantt() -> list[dict]:
-    summary = []
-
-    def normalize_date(value):
-        if not value:
-            return None
-        try:
-            return datetime.strptime(value, '%Y-%m-%d')
-        except ValueError:
-            return None
-
-    for company in SAMPLE_COMPANIES:
-        company_id = company['id']
-        for project in company['projects']:
-            project_id = project['id']
-            initialize_project_gantt_tasks(project, company['name'], company_id)
-            color = ensure_project_color(company_id, project)
-            tasks = PROJECT_GANTT_TASKS.get(project_id, [])
-            manual_tasks = [task for task in GENERAL_TASKS if task.get('project_id') == project_id]
-            combined = list(tasks) + manual_tasks
-
-            entry = {
-                'project_id': project_id,
-                'project_name': project.get('name'),
-                'company_name': company['name'],
-                'color': color,
-                'assignee': project.get('assignee', ''),
-                'phases': [],
-                'range': {'plan_start': None, 'plan_end': None, 'timeline_start': None, 'timeline_end': None}
-            }
-
-            for index, task in enumerate(sorted(combined, key=lambda t: (t.get('order_index') or (index + 1), t.get('plan_start') or ''))):
-                plan_start = task.get('plan_start') or task.get('actual_start') or project.get('due_date') or task.get('due_date')
-                plan_end = task.get('plan_end') or task.get('actual_end') or project.get('due_date') or plan_start
-                actual_start = task.get('actual_start')
-                actual_end = task.get('actual_end') or (project.get('delivery_date') if task.get('status') == '完了' else '')
-
-                if not plan_start:
-                    plan_start = datetime.now().strftime('%Y-%m-%d')
-                if not plan_end:
-                    plan_end = plan_start
-
-                entry['phases'].append({
-                    'title': task.get('title'),
-                    'status': task.get('status'),
-                    'plan_start': plan_start,
-                    'plan_end': plan_end,
-                    'actual_start': actual_start,
-                    'actual_end': actual_end,
-                    'origin': task.get('task_origin', 'manual'),
-                    'auto_stage': task.get('auto_stage'),
-                    'order_index': task.get('order_index') or (index + 1)
-                })
-
-                start_dt = normalize_date(plan_start) or normalize_date(actual_start)
-                end_dt = normalize_date(plan_end) or normalize_date(actual_end) or start_dt
-                if start_dt:
-                    current_start = entry['range']['plan_start']
-                    if current_start is None or start_dt < current_start:
-                        entry['range']['plan_start'] = start_dt
-                if end_dt:
-                    current_end = entry['range']['plan_end']
-                    if current_end is None or end_dt > current_end:
-                        entry['range']['plan_end'] = end_dt
-
-            timeline_info = build_project_status_timeline(project)
-            entry['status_timeline'] = timeline_info['segments']
-            entry['status_days'] = timeline_info['days']
-            entry['status_history'] = timeline_info['history']
-
-            timeline_start_dt = normalize_date(timeline_info['start'])
-            timeline_end_dt = normalize_date(timeline_info['end'])
-
-            if timeline_start_dt:
-                entry['range']['timeline_start'] = timeline_start_dt
-                current_start = entry['range']['plan_start']
-                if current_start is None or timeline_start_dt < current_start:
-                    entry['range']['plan_start'] = timeline_start_dt
-            if timeline_end_dt:
-                entry['range']['timeline_end'] = timeline_end_dt
-                current_end = entry['range']['plan_end']
-                if current_end is None or timeline_end_dt > current_end:
-                    entry['range']['plan_end'] = timeline_end_dt
-
-            if entry['range']['plan_start'] is not None:
-                entry['range']['plan_start'] = entry['range']['plan_start'].strftime('%Y-%m-%d')
-            if entry['range']['plan_end'] is not None:
-                entry['range']['plan_end'] = entry['range']['plan_end'].strftime('%Y-%m-%d')
-            if entry['range']['timeline_start'] is not None:
-                entry['range']['timeline_start'] = entry['range']['timeline_start'].strftime('%Y-%m-%d')
-            if entry['range']['timeline_end'] is not None:
-                entry['range']['timeline_end'] = entry['range']['timeline_end'].strftime('%Y-%m-%d')
-
-            summary.append(entry)
-
-    summary.sort(key=lambda item: (item.get('company_name') or '', item.get('project_name') or ''))
-    return summary
-
-
 def parse_date_safe(value: str | None):
     if not value:
         return None
@@ -1927,76 +1617,6 @@ def parse_date_safe(value: str | None):
         return datetime.strptime(value, '%Y-%m-%d').date()
     except (TypeError, ValueError):
         return None
-
-
-def filter_project_summary_entries(summary: list[dict], params: dict, filtered_tasks: list[dict]):
-    project_ids_from_tasks = {task.get('project_id') for task in filtered_tasks if task.get('project_id')}
-    project_filter = (params.get('project_id') or '').strip()
-    assignee_filter = (params.get('assignee') or '').strip()
-    status_filter = (params.get('status') or '').strip()
-    keyword_filter = (params.get('keyword') or '').strip().lower()
-    start_filter = parse_date_safe(params.get('start_date'))
-    end_filter = parse_date_safe(params.get('end_date'))
-
-    def entry_matches(entry):
-        if project_filter and str(entry.get('project_id')) != project_filter:
-            return False
-
-        if assignee_filter:
-            entry_assignee = entry.get('assignee') or ''
-            phase_assignees = {
-                phase.get('assignee')
-                for phase in entry.get('phases', [])
-                if phase.get('assignee')
-            }
-            if assignee_filter != entry_assignee and assignee_filter not in phase_assignees:
-                return False
-
-        if status_filter:
-            status_set = {
-                segment.get('status')
-                for segment in entry.get('status_timeline', [])
-                if segment.get('status')
-            }
-            status_set.update({
-                phase.get('status')
-                for phase in entry.get('phases', [])
-                if phase.get('status')
-            })
-            if status_filter not in status_set:
-                return False
-
-        if keyword_filter:
-            project_label = (entry.get('project_name') or '').lower()
-            company_label = (entry.get('company_name') or '').lower()
-            if keyword_filter not in project_label and keyword_filter not in company_label:
-                return False
-
-        entry_start = parse_date_safe(entry.get('range', {}).get('timeline_start') or entry.get('range', {}).get('plan_start'))
-        entry_end = parse_date_safe(entry.get('range', {}).get('timeline_end') or entry.get('range', {}).get('plan_end'))
-        if start_filter and entry_end and entry_end < start_filter:
-            return False
-        if end_filter and entry_start and entry_start > end_filter:
-            return False
-        return True
-
-    results = []
-    for entry in summary:
-        if project_filter and str(entry.get('project_id')) != project_filter:
-            continue
-        if project_ids_from_tasks and entry.get('project_id') not in project_ids_from_tasks:
-            continue
-        if not entry_matches(entry):
-            continue
-        results.append(entry)
-
-    if not results and project_filter:
-        # Fallback: show the requested project even if task filters narrowed everything out
-        results = [
-            entry for entry in summary
-            if str(entry.get('project_id')) == project_filter
-        ]
-    return results
 
 
 # 全案件をフラット化（全社統合ビュー用）
@@ -2223,7 +1843,6 @@ def build_project_detail_context(project_id):
     company = next((c for c in SAMPLE_COMPANIES if c['id'] == project.get('company_id')), None)
 
     company_id = company['id'] if company else project.get('company_id')
-    initialize_project_gantt_tasks(project, company['name'] if company else project.get('company'), company_id)
     project_tasks = get_project_tasks(project_id)
 
     video_items = copy.deepcopy(ensure_video_items(project_id, project))
@@ -2426,13 +2045,10 @@ def api_update_project(project_id):
     project['delivered'] = data.get('delivered', project.get('delivered', False))
 
     if company:
-        initialize_project_gantt_tasks(project, company['name'], company['id'])
         rebuild_task_cache()
     
     # 案件名が変更された場合、関連するタスクの案件名も更新
     if old_project_name and new_project_name != old_project_name:
-        for task in PROJECT_GANTT_TASKS.get(project_id, []):
-            task['project_name'] = new_project_name
         for manual_task in GENERAL_TASKS:
             if manual_task.get('project_id') == project_id:
                 manual_task['project_name'] = new_project_name
@@ -2512,7 +2128,6 @@ def api_create_project():
     company['projects'].append(new_project)
     actor = g.current_user['name'] if g.current_user and g.current_user.get('name') else STATUS_HISTORY_DEFAULT_ACTOR
     record_project_status_change(new_project['id'], new_project.get('status', '進行中'), actor=actor)
-    initialize_project_gantt_tasks(new_project, company['name'], company_id)
     rebuild_task_cache()
     global SAMPLE_PROJECTS, PROJECT_NAME_TO_ID
     SAMPLE_PROJECTS = get_all_projects()
@@ -2576,7 +2191,6 @@ def api_toggle_delivered(project_id):
         record_project_status_change(project_id, project.get('status'), actor=actor, changed_at=changed_at)
 
     if company:
-        initialize_project_gantt_tasks(project, company['name'], company['id'])
         rebuild_task_cache()
     
     return jsonify({
@@ -2660,13 +2274,13 @@ def api_add_project_task(project_id):
         project_color=project.get('color'),
         origin='manual'
     )
-    project_tasks = PROJECT_GANTT_TASKS.setdefault(project_id, [])
     if company_name:
         task['company_name'] = company_name
+    existing_tasks = [t for t in GENERAL_TASKS if t.get('project_id') == project_id]
     if not task.get('order_index'):
-        task['order_index'] = len(project_tasks) + 1
-    project_tasks.append(task)
-    project_tasks.sort(key=lambda t: (t.get('order_index') or 9999, t.get('id')))
+        task['order_index'] = len(existing_tasks) + 1
+    GENERAL_TASKS.append(task)
+    GENERAL_TASKS.sort(key=lambda t: (t.get('order_index') or 9999, t.get('id')))
     rebuild_task_cache()
 
     return jsonify({'status': 'success', 'message': 'タスクを追加しました', 'data': task})
@@ -2847,98 +2461,6 @@ def api_task_detail(task_id):
     })
 
 
-@app.route('/api/gantt/tasks')
-@login_required
-def api_gantt_tasks():
-    current_user = g.current_user
-    base_tasks = gather_project_tasks()
-    user_tasks = filter_tasks_for_user(base_tasks, current_user)
-
-    params = {
-        'project_id': request.args.get('project_id'),
-        'assignee': request.args.get('assignee'),
-        'status': request.args.get('status'),
-        'keyword': request.args.get('keyword'),
-        'start_date': request.args.get('start_date'),
-        'end_date': request.args.get('end_date'),
-    }
-
-    filtered_tasks = filter_tasks_by_params(user_tasks, params)
-    include_history = request.args.get('include_history') == '1'
-
-    def serialize(task):
-        payload = serialize_gantt_task(task)
-        if not include_history:
-            payload.pop('history', None)
-        return payload
-
-    filters = collect_task_filters(user_tasks)
-
-    all_tasks_payload = [serialize_gantt_task(task) for task in user_tasks]
-    if not include_history:
-        for entry in all_tasks_payload:
-            entry.pop('history', None)
-
-    project_summary = summarize_projects_for_gantt()
-
-    return jsonify({
-        'status': 'success',
-        'data': [serialize(task) for task in filtered_tasks],
-        'meta': {
-            'filters': filters,
-            'view': request.args.get('view', 'plan'),
-            'total': len(filtered_tasks),
-            'all_tasks': all_tasks_payload,
-            'projects_summary': project_summary
-        }
-    })
-
-
-@app.route('/api/gantt/tasks/<int:task_id>/history')
-@login_required
-def api_gantt_task_history(task_id):
-    task = find_task(task_id)
-    if not task:
-        return jsonify({'status': 'error', 'message': 'タスクが見つかりません'}), 404
-    return jsonify({
-        'status': 'success',
-        'data': task.get('history', [])
-    })
-
-
-@app.route('/api/gantt/tasks/reorder', methods=['POST'])
-@login_required
-@role_required('admin', 'editor')
-def api_gantt_reorder():
-    data = request.get_json() or {}
-    order = data.get('order', [])
-    if not isinstance(order, list):
-        return jsonify({'status': 'error', 'message': 'orderはリスト形式で指定してください'}), 400
-
-    actor = g.current_user['name'] if g.current_user else 'システム'
-    updated = []
-    affected_containers = set()
-    for index, task_id in enumerate(order, start=1):
-        task, container = find_task_with_container(task_id)
-        if not task:
-            continue
-        record_task_history(task, 'order_index', task.get('order_index'), index, actor)
-        task['order_index'] = index
-        update_task_metadata(task, actor)
-        updated.append(task_id)
-        if container is not None:
-            affected_containers.add(id(container))
-
-    for project_id, tasks in PROJECT_GANTT_TASKS.items():
-        tasks.sort(key=lambda t: (t.get('order_index') or 9999, t.get('id')))
-    GENERAL_TASKS.sort(key=lambda t: (t.get('due_date') or '', t.get('id')))
-    rebuild_task_cache()
-
-    return jsonify({
-        'status': 'success',
-        'message': '表示順を更新しました',
-        'data': {'updated_ids': updated}
-    })
 
 @app.route('/api/tasks/<int:task_id>', methods=['PUT'])
 @login_required
@@ -3001,19 +2523,15 @@ def api_update_task(task_id):
         record_task_history(task, 'project_id', task.get('project_id'), new_project_id, actor)
         record_task_history(task, 'project_name', task.get('project_name'), new_project_name, actor)
 
-        if container is GENERAL_TASKS and new_project_id:
-            GENERAL_TASKS.remove(task)
-            container = PROJECT_GANTT_TASKS.setdefault(new_project_id, [])
-            if not task.get('order_index'):
-                task['order_index'] = len(container) + 1
-            container.append(task)
-        elif container is not GENERAL_TASKS and new_project_id and task.get('project_id') != new_project_id:
-            # move between project lists
+        if new_project_id:
+            # タスクを新しいプロジェクトに移動
             if container:
                 container.remove(task)
-            destination = PROJECT_GANTT_TASKS.setdefault(new_project_id, [])
-            destination.append(task)
-            container = destination
+            existing_tasks = [t for t in GENERAL_TASKS if t.get('project_id') == new_project_id]
+            if not task.get('order_index'):
+                task['order_index'] = len(existing_tasks) + 1
+            GENERAL_TASKS.append(task)
+            container = GENERAL_TASKS
 
         task['project_id'] = new_project_id
         task['project_name'] = new_project_name
@@ -3044,8 +2562,6 @@ def api_update_task(task_id):
     if task.get('task_origin') == 'auto':
         task['user_modified'] = True
 
-    for project_id, tasks in PROJECT_GANTT_TASKS.items():
-        tasks.sort(key=lambda t: (t.get('order_index') or 9999, t.get('id')))
     GENERAL_TASKS.sort(key=lambda t: (t.get('due_date') or '', t.get('id')))
     rebuild_task_cache()
     
@@ -3111,13 +2627,13 @@ def api_create_task():
     )
 
     if project_id:
-        project_tasks = PROJECT_GANTT_TASKS.setdefault(project_id, [])
         if project and project_id and company_name:
             new_task['company_name'] = company_name
+        existing_tasks = [t for t in GENERAL_TASKS if t.get('project_id') == project_id]
         if not new_task.get('order_index'):
-            new_task['order_index'] = len(project_tasks) + 1
-        project_tasks.append(new_task)
-        project_tasks.sort(key=lambda t: (t.get('order_index') or 9999, t.get('id')))
+            new_task['order_index'] = len(existing_tasks) + 1
+        GENERAL_TASKS.append(new_task)
+        GENERAL_TASKS.sort(key=lambda t: (t.get('order_index') or 9999, t.get('id')))
     else:
         GENERAL_TASKS.append(new_task)
     rebuild_task_cache()
@@ -3969,40 +3485,6 @@ def editor_input_videos():
     )
 
 
-@app.route('/editor/gantt')
-@login_required
-@role_required('admin', 'editor')
-def editor_gantt():
-    user_tasks = filter_tasks_for_user(get_all_tasks(), g.current_user)
-    filter_options = collect_task_filters(user_tasks)
-
-    params = {
-        'project_id': (request.args.get('project_id') or '').strip(),
-        'assignee': (request.args.get('assignee') or '').strip(),
-        'status': (request.args.get('status') or '').strip(),
-        'keyword': (request.args.get('keyword') or '').strip(),
-        'start_date': (request.args.get('start_date') or '').strip(),
-        'end_date': (request.args.get('end_date') or '').strip()
-    }
-
-    filtered_task_entries = filter_tasks_by_params(user_tasks, params)
-    serialized_tasks = [serialize_gantt_task(task) for task in filtered_task_entries]
-
-    project_summary_all = summarize_projects_for_gantt()
-    filtered_summary = filter_project_summary_entries(project_summary_all, params, filtered_task_entries)
-    return render_template(
-        'gantt.html',
-        base_template='editor_layout.html',
-        initial_tasks=serialized_tasks,
-        project_summary=filtered_summary,
-        filter_options=filter_options,
-        selected_filters=params,
-        project_choices=filter_options.get('projects', []),
-        dependency_types=sorted(TASK_DEPENDENCY_TYPES),
-        current_view='plan'
-    )
-
-
 @app.route('/editor/companies')
 @login_required
 @role_required('admin', 'editor')
@@ -4832,41 +4314,6 @@ def admin_training_videos():
         status_options=TRAINING_STATUS_OPTIONS,
         summary=summary,
         overall_completion=overall_completion
-    )
-
-
-@app.route('/admin/gantt')
-@login_required
-@role_required('admin')
-def admin_gantt():
-    user_tasks = filter_tasks_for_user(get_all_tasks(), g.current_user)
-    filter_options = collect_task_filters(user_tasks)
-
-    params = {
-        'project_id': (request.args.get('project_id') or '').strip(),
-        'assignee': (request.args.get('assignee') or '').strip(),
-        'status': (request.args.get('status') or '').strip(),
-        'keyword': (request.args.get('keyword') or '').strip(),
-        'start_date': (request.args.get('start_date') or '').strip(),
-        'end_date': (request.args.get('end_date') or '').strip()
-    }
-
-    filtered_task_entries = filter_tasks_by_params(user_tasks, params)
-    serialized_tasks = [serialize_gantt_task(task) for task in filtered_task_entries]
-
-    project_summary_all = summarize_projects_for_gantt()
-    filtered_summary = filter_project_summary_entries(project_summary_all, params, filtered_task_entries)
-
-    return render_template(
-        'gantt.html',
-        base_template='layout.html',
-        initial_tasks=serialized_tasks,
-        project_summary=filtered_summary,
-        filter_options=filter_options,
-        selected_filters=params,
-        project_choices=filter_options.get('projects', []),
-        dependency_types=sorted(TASK_DEPENDENCY_TYPES),
-        current_view='plan'
     )
 
 
