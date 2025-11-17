@@ -3393,6 +3393,91 @@ def parse_checkbox(checkbox_str):
     # チェックマーク、✓、☑、✓、TRUE、1などをTrueに
     return checkbox_str in ['TRUE', '1', '✓', '☑', '✔', 'チェック済', '済', '○', 'YES', 'Y']
 
+
+def _sync_tasks_from_project(project, assignee_name, due_date, is_completed):
+    """案件データからタスクを自動生成・更新"""
+    if not project:
+        return
+    
+    project_id = project.get('id')
+    project_name = project.get('name', '')
+    project_status = project.get('status', '進行中')
+    
+    # 既存のタスクを取得
+    existing_tasks = get_project_tasks(project_id)
+    
+    # 担当者名を正規化（既存のタスクの担当者名とマッチング）
+    normalized_assignee = assignee_name or project.get('assignee', '未割当')
+    
+    # 既存のタスクの担当者名を確認して、一致するものがあればそれを使用
+    for task in existing_tasks:
+        if task.get('assignee') and normalized_assignee:
+            # 部分一致でマッチング（例: "テスト" と "(完)テスト"）
+            if normalized_assignee in task.get('assignee') or task.get('assignee') in normalized_assignee:
+                normalized_assignee = task.get('assignee')
+                break
+    
+    # タスクのステータスを案件のステータスに合わせる
+    task_status = '完了' if is_completed else ('進行中' if project_status == '進行中' else '待機中')
+    
+    # 編集タスクを生成または更新
+    edit_task = next((t for t in existing_tasks if t.get('type') == 'EDIT'), None)
+    if edit_task:
+        # 既存の編集タスクを更新
+        edit_task['assignee'] = normalized_assignee
+        edit_task['due_date'] = due_date or edit_task.get('due_date', '')
+        edit_task['status'] = task_status
+        if is_completed:
+            edit_task['progress'] = 100
+            edit_task['actual_end'] = project.get('delivery_date') or datetime.now().strftime('%Y-%m-%d')
+        elif task_status == '進行中':
+            edit_task['progress'] = 50
+    else:
+        # 新規編集タスクを作成
+        edit_task = create_task_entry(
+            title=f'{project_name} - 編集',
+            task_type='EDIT',
+            status=task_status,
+            assignee=normalized_assignee,
+            due_date=due_date or '',
+            priority='中',
+            project=project,
+            project_id=project_id,
+            progress=100 if is_completed else (50 if task_status == '進行中' else 0),
+            plan_end=due_date or '',
+            actual_end=project.get('delivery_date') or '' if is_completed else '',
+            origin='auto'
+        )
+        GENERAL_TASKS.append(edit_task)
+    
+    # レビュータスクを生成または更新（完了していない場合のみ）
+    if not is_completed:
+        review_task = next((t for t in existing_tasks if t.get('type') == 'REVIEW'), None)
+        if review_task:
+            # 既存のレビュータスクを更新
+            review_task['assignee'] = normalized_assignee
+            review_task['due_date'] = due_date or review_task.get('due_date', '')
+            review_task['status'] = '待機中' if task_status == '進行中' else task_status
+        else:
+            # 新規レビュータスクを作成
+            review_task = create_task_entry(
+                title=f'{project_name} - レビュー',
+                task_type='REVIEW',
+                status='待機中',
+                assignee=normalized_assignee,
+                due_date=due_date or '',
+                priority='中',
+                project=project,
+                project_id=project_id,
+                progress=0,
+                plan_end=due_date or '',
+                origin='auto'
+            )
+            GENERAL_TASKS.append(review_task)
+    
+    # タスクキャッシュを再構築
+    rebuild_task_cache()
+
 @app.route('/api/import/csv', methods=['POST'])
 def import_csv():
     """CSVファイルをインポート"""
@@ -3460,6 +3545,9 @@ def import_csv():
                                 existing_project['delivered'] = True
                                 existing_project['status'] = '完了'
                                 existing_project['progress'] = 100
+                            
+                            # タスクを自動生成・更新
+                            _sync_tasks_from_project(existing_project, assignee, due_date, cl_checked)
                             imported_count += 1
                         else:
                             # 新規案件を作成
@@ -3483,6 +3571,9 @@ def import_csv():
                             # 会社に追加
                             if SAMPLE_COMPANIES:
                                 SAMPLE_COMPANIES[0]['projects'].append(new_project)
+                            
+                            # タスクを自動生成
+                            _sync_tasks_from_project(new_project, assignee, due_date, cl_checked)
                             imported_count += 1
                     else:
                         skipped_count += 1
@@ -3530,6 +3621,9 @@ def import_csv():
                     
                     if SAMPLE_COMPANIES:
                         SAMPLE_COMPANIES[0]['projects'].append(new_project)
+                    
+                    # タスクを自動生成
+                    _sync_tasks_from_project(new_project, assignee, due_date, delivered)
                     imported_count += 1
                 
                 elif import_type == 'projects_alt':
@@ -3568,6 +3662,9 @@ def import_csv():
                                 existing_project['delivered'] = True
                                 existing_project['status'] = '完了'
                                 existing_project['progress'] = 100
+                            
+                            # タスクを自動生成・更新
+                            _sync_tasks_from_project(existing_project, assignee, due_date, cl_checked)
                             imported_count += 1
                         else:
                             max_project_id += 1
@@ -3589,6 +3686,9 @@ def import_csv():
                             }
                             if SAMPLE_COMPANIES:
                                 SAMPLE_COMPANIES[0]['projects'].append(new_project)
+                            
+                            # タスクを自動生成
+                            _sync_tasks_from_project(new_project, assignee, due_date, cl_checked)
                             imported_count += 1
                     else:
                         skipped_count += 1
