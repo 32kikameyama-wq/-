@@ -3973,7 +3973,6 @@ def import_csv():
                         if existing_project:
                             # データベースに案件を更新
                             progress = 100 if cl_checked else existing_project.get('progress', 0)
-                            status = '完了' if cl_checked else existing_project.get('status', '進行中')
                             notes = existing_project.get('notes', '')
                             if paid and '支払い済' not in notes:
                                 notes = (notes + ' 支払い済').strip() if notes else '支払い済'
@@ -3991,6 +3990,7 @@ def import_csv():
                                     progress = :progress,
                                     paid = :paid,
                                     notes = :notes,
+                                    company_id = :company_id,
                                     updated_at = now()
                                 where id = :id
                             """,
@@ -4005,7 +4005,8 @@ def import_csv():
                                 status=status,
                                 progress=progress,
                                 paid=paid,
-                                notes=notes
+                                notes=notes,
+                                company_id=company_id_int
                             )
                             
                             # 更新された案件を取得
