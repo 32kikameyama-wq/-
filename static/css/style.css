@@ -1755,6 +1755,33 @@ section h3 {
     table-layout: auto;
 }
 
+.projects-table .col-checkbox {
+    width: 40px;
+    text-align: center;
+}
+
+.projects-table .col-checkbox input[type="checkbox"] {
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    color: #fff;
+    border: 1px solid #dc3545;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background-color: #c82333;
+    border-color: #bd2130;
+}
+
+.btn-danger:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 .projects-table thead {
     background: #a8d3ff;
     color: #000;

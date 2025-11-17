@@ -2112,6 +2112,71 @@ def api_create_project():
         'data': new_project
     })
 
+@app.route('/api/projects/bulk-delete', methods=['POST'])
+@login_required
+@role_required('admin')
+def api_bulk_delete_projects():
+    """案件一括削除API"""
+    data = request.get_json()
+    project_ids = data.get('project_ids', [])
+    
+    if not project_ids or not isinstance(project_ids, list):
+        return jsonify({'status': 'error', 'message': '削除する案件IDが指定されていません'}), 400
+    
+    if len(project_ids) == 0:
+        return jsonify({'status': 'error', 'message': '削除する案件が選択されていません'}), 400
+    
+    deleted_count = 0
+    failed_ids = []
+    
+    for project_id in project_ids:
+        try:
+            project_id_int = int(project_id)
+            # 案件が存在するか確認
+            project, _ = get_project_by_id(project_id_int)
+            if not project:
+                failed_ids.append(project_id_int)
+                continue
+            
+            # データベースから案件を削除（関連するタスクも削除される）
+            execute("delete from app.projects where id=:id", id=project_id_int)
+            
+            # 関連するタスクも削除
+            tasks_to_remove = [t for t in GENERAL_TASKS if t.get('project_id') == project_id_int]
+            for task in tasks_to_remove:
+                GENERAL_TASKS.remove(task)
+            rebuild_task_cache()
+            
+            deleted_count += 1
+        except (ValueError, TypeError) as e:
+            failed_ids.append(project_id)
+            continue
+        except Exception as e:
+            failed_ids.append(project_id)
+            continue
+    
+    if deleted_count > 0:
+        return jsonify({
+            'status': 'success',
+            'message': f'{deleted_count}件の案件を削除しました',
+            'data': {
+                'deleted_count': deleted_count,
+                'failed_count': len(failed_ids),
+                'failed_ids': failed_ids
+            }
+        })
+    else:
+        return jsonify({
+            'status': 'error',
+            'message': '案件の削除に失敗しました',
+            'data': {
+                'deleted_count': 0,
+                'failed_count': len(failed_ids),
+                'failed_ids': failed_ids
+            }
+        }), 400
+
+
 @app.route('/api/projects/<int:project_id>/toggle-delivered', methods=['POST'])
 def api_toggle_delivered(project_id):
     """CLチェックボックスの切り替えAPI"""
@@ -3648,6 +3713,19 @@ def import_csv():
     
     file = request.files['csv_file']
     import_type = request.form.get('import_type', 'projects')
+    company_id = request.form.get('company_id', '').strip()
+    
+    # 会社IDのバリデーション
+    if not company_id:
+        return jsonify({'status': 'error', 'message': '紐付ける会社を選択してください'}), 400
+    
+    try:
+        company_id_int = int(company_id)
+        company = get_company_by_id(company_id_int)
+        if not company:
+            return jsonify({'status': 'error', 'message': '選択された会社が見つかりません'}), 400
+    except (ValueError, TypeError):
+        return jsonify({'status': 'error', 'message': '無効な会社IDです'}), 400
     
     if file.filename == '':
         return jsonify({'status': 'error', 'message': 'ファイルが選択されていません'}), 400
@@ -3741,16 +3819,8 @@ def import_csv():
                             imported_count += 1
                         else:
                             # 新規案件を作成（データベースに保存）
-                            # デフォルトで最初の会社に紐付け（会社がない場合は作成）
-                            companies = get_all_companies()
-                            if not companies:
-                                # デフォルト会社を作成
-                                execute("""
-                                    insert into app.companies (name, code, updated_at)
-                                    values (:name, :code, now())
-                                """, name='デフォルト会社', code='DEFAULT')
-                                companies = get_all_companies()
-                            company_id = companies[0]['id'] if companies else 1
+                            # 進捗を計算
+                            progress = 100 if cl_checked else (50 if status == '進行中' else 0)
                             
                             # データベースに案件を保存
                             execute("""
@@ -3766,16 +3836,16 @@ def import_csv():
                                     :paid, :notes
                                 )
                             """,
-                                company_id=company_id,
+                                company_id=company_id_int,
                                 name=title,
-                                status='完了' if cl_checked else '進行中',
+                                status=status,
                                 due_date=due_date or None,
                                 assignee=assignee or '未割当',
                                 completion_length=None,
                                 video_axis='LONG',
                                 delivered=cl_checked,
                                 delivery_date=delivery_date or None,
-                                progress=100 if cl_checked else 0,
+                                progress=progress,
                                 raw_material_url=raw_material,
                                 final_video_url=delivery_video,
                                 script_url=script,
@@ -3795,7 +3865,7 @@ def import_csv():
                         skipped_count += 1
                 
                 elif import_type == 'video_editing':
-                    # 動画編集管理シート形式: 納期、ID、企画タイトル、完成尺、担当、納品済、元素材、納品動画、画面キャプチャ素材、完パケ
+                    # 動画編集管理シート形式: 納期、ID、企画タイトル、完成尺、担当、納品済、元素材、納品動画、画面キャプチャ素材、完パケ、ステータス
                     due_date = parse_japanese_date(row.get('納期', ''))
                     project_id = row.get('ID', '').strip()
                     title = row.get('企画タイトル', '').strip()
@@ -3806,6 +3876,11 @@ def import_csv():
                     delivery_video = row.get('納品動画', '').strip()
                     screenshot_material = row.get('画面キャプチャ素材', '').strip()
                     final_package = row.get('完パケ', '').strip()
+                    # ステータス列を読み込む（CSVに含まれている場合）
+                    status = row.get('ステータス', '').strip()
+                    if not status or status not in ['計画中', '進行中', 'レビュー中', '完了']:
+                        # ステータスが無効または未指定の場合は、納品済み状態から推測
+                        status = '完了' if delivered else '進行中'
                     
                     if not title:
                         skipped_count += 1
@@ -3817,15 +3892,8 @@ def import_csv():
                     except:
                         completion_length_int = None
                     
-                    # デフォルトで最初の会社に紐付け（会社がない場合は作成）
-                    companies = get_all_companies()
-                    if not companies:
-                        execute("""
-                            insert into app.companies (name, code, updated_at)
-                            values (:name, :code, now())
-                        """, name='デフォルト会社', code='DEFAULT')
-                        companies = get_all_companies()
-                    company_id = companies[0]['id'] if companies else 1
+                    # ステータスを決定
+                    status = '完了' if delivered else '進行中'
                     
                     # データベースに案件を保存
                     execute("""
@@ -3839,9 +3907,9 @@ def import_csv():
                             :progress, :raw_material_url, :final_video_url, :script_url
                         )
                     """,
-                        company_id=company_id,
+                        company_id=company_id_int,
                         name=title,
-                        status='完了' if delivered else '進行中',
+                        status=status,
                         due_date=due_date or None,
                         assignee=assignee or '未割当',
                         completion_length=completion_length_int,
@@ -3937,15 +4005,9 @@ def import_csv():
                                 _sync_tasks_from_project(updated_project, assignee, due_date, cl_checked)
                             imported_count += 1
                         else:
-                            # デフォルトで最初の会社に紐付け（会社がない場合は作成）
-                            companies = get_all_companies()
-                            if not companies:
-                                execute("""
-                                    insert into app.companies (name, code, updated_at)
-                                    values (:name, :code, now())
-                                """, name='デフォルト会社', code='DEFAULT')
-                                companies = get_all_companies()
-                            company_id = companies[0]['id'] if companies else 1
+                            # ステータスを決定
+                            status = '完了' if cl_checked else '進行中'
+                            progress = 100 if cl_checked else 0
                             
                             # データベースに案件を保存
                             execute("""
@@ -3961,16 +4023,16 @@ def import_csv():
                                     :paid, :notes
                                 )
                             """,
-                                company_id=company_id,
+                                company_id=company_id_int,
                                 name=title,
-                                status='完了' if cl_checked else '進行中',
+                                status=status,
                                 due_date=due_date or None,
                                 assignee=assignee or '未割当',
                                 completion_length=None,
                                 video_axis='LONG',
                                 delivered=cl_checked,
                                 delivery_date=delivery_date or None,
-                                progress=100 if cl_checked else 0,
+                                progress=progress,
                                 raw_material_url=raw_material,
                                 final_video_url=delivery_video,
                                 script_url=script,

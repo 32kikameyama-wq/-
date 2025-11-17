@@ -36,6 +36,9 @@
             <table class="projects-table">
                 <thead>
                     <tr>
+                        <th class="col-checkbox">
+                            <input type="checkbox" id="select-all-projects" onchange="toggleAllProjects(this)">
+                        </th>
                         <th class="col-id">ID</th>
                         <th class="col-company">会社</th>
                         <th class="col-title">企画タイトル</th>
@@ -54,6 +57,9 @@
                 <tbody>
                     {% for project in projects %}
                     <tr data-company-id="{{ project.company_id }}" data-project-id="{{ project.id }}">
+                        <td class="col-checkbox">
+                            <input type="checkbox" class="project-checkbox" value="{{ project.id }}">
+                        </td>
                         <td class="col-id">{{ project.id }}</td>
                         <td class="col-company">{{ project.client_name }}</td>
                         <td class="col-title">
@@ -119,13 +125,19 @@
         </div>
         {% if allow_project_actions|default(True) %}
         <div class="table-actions">
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <button class="btn btn-primary" onclick="showCsvUploadModal()">CSVから一括追加</button>
-                {% if request.args.get('company_id') %}
-                <button class="btn btn-secondary" onclick="addProject({{ request.args.get('company_id') }})">新規案件を追加</button>
-                {% else %}
-                <button class="btn btn-secondary" onclick="addProject()">新規案件を追加</button>
-                {% endif %}
+            <div style="display: flex; gap: 10px; align-items: center; justify-content: space-between;">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button class="btn btn-primary" onclick="showCsvUploadModal()">CSVから一括追加</button>
+                    {% if request.args.get('company_id') %}
+                    <button class="btn btn-secondary" onclick="addProject({{ request.args.get('company_id') }})">新規案件を追加</button>
+                    {% else %}
+                    <button class="btn btn-secondary" onclick="addProject()">新規案件を追加</button>
+                    {% endif %}
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button class="btn btn-danger" onclick="bulkDeleteProjects()" id="bulk-delete-btn" disabled>選択した案件を削除</button>
+                    <span id="selected-count" style="color: #666; font-size: 0.9em;">0件選択中</span>
+                </div>
             </div>
         </div>
         {% endif %}
@@ -306,6 +318,7 @@ function submitProjectsCsvImport() {
     const formData = new FormData();
     const fileInput = document.getElementById('projects-csv-file');
     const importType = document.getElementById('projects-import-type').value;
+    const companyId = document.getElementById('projects-import-company').value;
     const resultDiv = document.getElementById('projects-import-result');
     
     if (!fileInput.files[0]) {
@@ -313,8 +326,14 @@ function submitProjectsCsvImport() {
         return;
     }
     
+    if (!companyId) {
+        alert('紐付ける会社を選択してください');
+        return;
+    }
+    
     formData.append('csv_file', fileInput.files[0]);
     formData.append('import_type', importType);
+    formData.append('company_id', companyId);
     
     resultDiv.style.display = 'block';
     resultDiv.innerHTML = '<p>インポート中...</p>';
@@ -358,6 +377,81 @@ function submitProjectsCsvImport() {
         `;
     });
 }
+
+// 一括削除機能
+function toggleAllProjects(checkbox) {
+    const checkboxes = document.querySelectorAll('.project-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = checkbox.checked;
+    });
+    updateBulkDeleteButton();
+}
+
+function updateBulkDeleteButton() {
+    const checkboxes = document.querySelectorAll('.project-checkbox:checked');
+    const count = checkboxes.length;
+    const deleteBtn = document.getElementById('bulk-delete-btn');
+    const countSpan = document.getElementById('selected-count');
+    
+    if (deleteBtn) {
+        deleteBtn.disabled = count === 0;
+    }
+    if (countSpan) {
+        countSpan.textContent = count > 0 ? `${count}件選択中` : '0件選択中';
+    }
+    
+    // 全選択チェックボックスの状態を更新
+    const selectAll = document.getElementById('select-all-projects');
+    const allCheckboxes = document.querySelectorAll('.project-checkbox');
+    if (selectAll && allCheckboxes.length > 0) {
+        selectAll.checked = allCheckboxes.length === count && count > 0;
+        selectAll.indeterminate = count > 0 && count < allCheckboxes.length;
+    }
+}
+
+function bulkDeleteProjects() {
+    const checkboxes = document.querySelectorAll('.project-checkbox:checked');
+    const projectIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    
+    if (projectIds.length === 0) {
+        alert('削除する案件を選択してください');
+        return;
+    }
+    
+    if (!confirm(`選択した${projectIds.length}件の案件を削除してもよろしいですか？この操作は取り消せません。`)) {
+        return;
+    }
+    
+    fetch('/api/projects/bulk-delete', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ project_ids: projectIds })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.status === 'success') {
+            alert(`${result.data.deleted_count}件の案件を削除しました`);
+            window.location.reload();
+        } else {
+            alert('エラー: ' + result.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('案件の削除中にエラーが発生しました。');
+    });
+}
+
+// チェックボックスの変更を監視
+document.addEventListener('DOMContentLoaded', function() {
+    const checkboxes = document.querySelectorAll('.project-checkbox');
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', updateBulkDeleteButton);
+    });
+    updateBulkDeleteButton();
+});
 </script>
 
 <!-- CSVアップロードモーダル -->
@@ -374,6 +468,16 @@ function submitProjectsCsvImport() {
                     <label for="projects-csv-file">CSVファイルを選択</label>
                     <input type="file" id="projects-csv-file" name="csv_file" accept=".csv" required>
                     <small class="form-text">対応形式: 案件管理シート、動画編集管理シート</small>
+                </div>
+                <div class="form-group">
+                    <label for="projects-import-company">紐付ける会社</label>
+                    <select id="projects-import-company" name="company_id" required>
+                        <option value="">-- 会社を選択してください --</option>
+                        {% for company in companies %}
+                        <option value="{{ company.id }}">{{ company.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-text">インポートする案件を紐付ける会社を選択してください</small>
                 </div>
                 <div class="form-group">
                     <label for="projects-import-type">インポートタイプ</label>
