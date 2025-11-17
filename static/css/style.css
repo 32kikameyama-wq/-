@@ -416,10 +416,12 @@ body {
 /* メインコンテンツエリア */
 .main-content {
     flex: 1;
-    margin-left: 280px;
+    margin-left: 250px;
     min-height: 100vh;
-    padding: 36px 44px 48px;
+    padding: 20px 20px 20px 20px;
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(245, 250, 255, 0.95) 100%);
+    box-sizing: border-box;
+    width: calc(100% - 250px);
 }
 
 .main-content > *:first-child {
@@ -427,10 +429,11 @@ body {
 }
 
 .content-wrapper {
-    padding: 25px;
+    padding: 20px;
     max-width: 100%;
-    margin: 0 auto;
+    margin: 0;
     box-sizing: border-box;
+    width: 100%;
 }
 
 /* セクション */
@@ -1713,6 +1716,7 @@ section h3 {
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
     width: 100%;
     max-width: 100%;
+    box-sizing: border-box;
 }
 
 /* 必要に応じて横スクロールを表示 */
