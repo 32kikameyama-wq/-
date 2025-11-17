@@ -3508,16 +3508,22 @@ def import_csv():
         for row in reader:
             try:
                 if import_type == 'projects':
-                    # 案件管理シート形式: 納期、ID、企画タイトル、動画担当、CL✔、元素材、納品動画、台本、納品完了日
+                    # 案件管理シート形式: ID、企画タイトル、動画素材、完成動画、台本、納期、担当、CL✓/CL✔、納品完了日、支払い済
+                    # 列名のバリエーションに対応（動画担当/担当、元素材/動画素材、納品動画/完成動画、CL✔/CL✓）
                     due_date = parse_japanese_date(row.get('納期', ''))
                     project_id = row.get('ID', '').strip()
                     title = row.get('企画タイトル', '').strip()
-                    assignee = parse_assignee(row.get('動画担当', ''))
-                    cl_checked = parse_checkbox(row.get('CL✔', ''))
-                    raw_material = row.get('元素材', '').strip()
-                    delivery_video = row.get('納品動画', '').strip()
+                    # 担当列名のバリエーションに対応
+                    assignee = parse_assignee(row.get('担当', '') or row.get('動画担当', ''))
+                    # CL列名のバリエーションに対応（CL✓、CL✔）
+                    cl_checked = parse_checkbox(row.get('CL✓', '') or row.get('CL✔', ''))
+                    # 動画素材列名のバリエーションに対応（動画素材、元素材）
+                    raw_material = (row.get('動画素材', '') or row.get('元素材', '')).strip()
+                    # 完成動画列名のバリエーションに対応（完成動画、納品動画）
+                    delivery_video = (row.get('完成動画', '') or row.get('納品動画', '')).strip()
                     script = row.get('台本', '').strip()
                     delivery_date = parse_japanese_date(row.get('納品完了日', ''))
+                    paid = parse_checkbox(row.get('支払い済', ''))
                     
                     if not title:
                         skipped_count += 1
@@ -3566,7 +3572,9 @@ def import_csv():
                                 'raw_material_url': raw_material,
                                 'final_video_url': delivery_video,
                                 'script_url': script,
-                                'company_id': 1  # デフォルトで最初の会社に紐付け
+                                'company_id': 1,  # デフォルトで最初の会社に紐付け
+                                'paid': paid,
+                                'notes': '支払い済' if paid else ''
                             }
                             # 会社に追加
                             if SAMPLE_COMPANIES:
@@ -3625,6 +3633,16 @@ def import_csv():
                     # タスクを自動生成
                     _sync_tasks_from_project(new_project, assignee, due_date, delivered)
                     imported_count += 1
+                
+                elif import_type == 'submission':
+                    # 投稿管理シート（対応予定）
+                    skipped_count += 1
+                    continue
+                
+                elif import_type == 'materials':
+                    # 資料一覧シート（対応予定）
+                    skipped_count += 1
+                    continue
                 
                 elif import_type == 'projects_alt':
                     # 案件管理シート（別形式）: ID、企画タイトル、納期、担当、CL✔、動画素材、完成動画、台本、納品完了日、支払い済
