@@ -11,10 +11,19 @@
         <div class="back-link">
             <a href="{{ company_list_url }}">← 会社一覧に戻る</a>
         </div>
-        <h2>{{ company.name }}</h2>
-        <div class="company-meta">
-            <span class="company-code">{{ company.code }}</span>
-            <span class="meta-item">案件数: {{ company.projects|length }}件</span>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h2>{{ company.name }}</h2>
+                <div class="company-meta">
+                    <span class="company-code">{{ company.code }}</span>
+                    <span class="meta-item">案件数: {{ company.projects|length }}件</span>
+                </div>
+            </div>
+            {% if allow_company_actions|default(True) %}
+            <div>
+                <button class="btn btn-secondary" onclick="editCompany({{ company.id }}, '{{ company.name }}', '{{ company.code }}')">会社情報を編集</button>
+            </div>
+            {% endif %}
         </div>
     </section>
 

@@ -1923,6 +1923,52 @@ def api_create_company():
         }
     })
 
+@app.route('/api/companies/<int:company_id>', methods=['PUT'])
+@login_required
+@role_required('admin')
+def api_update_company(company_id):
+    """会社更新API"""
+    data = request.get_json()
+    
+    # バリデーション
+    if not data.get('company_name'):
+        return jsonify({'status': 'error', 'message': '会社名は必須です'}), 400
+    
+    # 会社が存在するか確認
+    company = get_company_by_id(company_id)
+    if not company:
+        return jsonify({'status': 'error', 'message': '会社が見つかりません'}), 404
+    
+    # 会社コードの重複チェック（変更される場合）
+    if data.get('company_code') and data['company_code'] != company.get('code'):
+        existing_company = fetch_one("select * from app.companies where code=:code and id != :id", 
+                                     code=data['company_code'], id=company_id)
+        if existing_company:
+            return jsonify({'status': 'error', 'message': 'この会社コードは既に使用されています'}), 400
+    
+    # データベースに会社を更新
+    if data.get('company_code'):
+        execute("""
+            update app.companies
+            set name = :name, code = :code, updated_at = now()
+            where id = :id
+        """, name=data['company_name'], code=data['company_code'], id=company_id)
+    else:
+        execute("""
+            update app.companies
+            set name = :name, updated_at = now()
+            where id = :id
+        """, name=data['company_name'], id=company_id)
+    
+    # 更新された会社を取得
+    updated_company = get_company_by_id(company_id)
+    
+    return jsonify({
+        'status': 'success',
+        'message': '会社情報を更新しました',
+        'data': updated_company
+    })
+
 @app.route('/api/projects/<int:project_id>')
 def api_project_detail(project_id):
     """案件詳細API"""
