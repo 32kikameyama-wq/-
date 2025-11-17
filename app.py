@@ -3551,6 +3551,13 @@ def import_csv():
                                 existing_project['delivered'] = True
                                 existing_project['status'] = '完了'
                                 existing_project['progress'] = 100
+                            # 支払い済情報を保存（メモとして保存）
+                            if paid:
+                                existing_project['paid'] = True
+                                if 'notes' not in existing_project:
+                                    existing_project['notes'] = ''
+                                if '支払い済' not in existing_project.get('notes', ''):
+                                    existing_project['notes'] = (existing_project.get('notes', '') + ' 支払い済').strip()
                             
                             # タスクを自動生成・更新
                             _sync_tasks_from_project(existing_project, assignee, due_date, cl_checked)
@@ -3680,6 +3687,13 @@ def import_csv():
                                 existing_project['delivered'] = True
                                 existing_project['status'] = '完了'
                                 existing_project['progress'] = 100
+                            # 支払い済情報を保存（メモとして保存）
+                            if paid:
+                                existing_project['paid'] = True
+                                if 'notes' not in existing_project:
+                                    existing_project['notes'] = ''
+                                if '支払い済' not in existing_project.get('notes', ''):
+                                    existing_project['notes'] = (existing_project.get('notes', '') + ' 支払い済').strip()
                             
                             # タスクを自動生成・更新
                             _sync_tasks_from_project(existing_project, assignee, due_date, cl_checked)
@@ -3700,7 +3714,9 @@ def import_csv():
                                 'raw_material_url': raw_material,
                                 'final_video_url': delivery_video,
                                 'script_url': script,
-                                'company_id': 1
+                                'company_id': 1,
+                                'paid': paid,
+                                'notes': '支払い済' if paid else ''
                             }
                             if SAMPLE_COMPANIES:
                                 SAMPLE_COMPANIES[0]['projects'].append(new_project)
