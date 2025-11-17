@@ -60,7 +60,7 @@
                         <td class="col-checkbox">
                             <input type="checkbox" class="project-checkbox" value="{{ project.id }}">
                         </td>
-                        <td class="col-id">{{ project.id }}</td>
+                        <td class="col-id">{{ loop.index }}</td>
                         <td class="col-company">{{ project.client_name }}</td>
                         <td class="col-title">
                             <a href="{{ url_for(detail_endpoint, project_id=project.id) }}">{{ project.name }}</a>
