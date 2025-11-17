@@ -1472,7 +1472,7 @@ def parse_date_safe(value: str | None):
 
 # 全案件をフラット化（全社統合ビュー用）
 def get_all_companies():
-    """データベースから全会社を取得"""
+    """データベースから全会社を取得（案件データを含む）"""
     companies = fetch_all("""
         select c.*, 
                count(p.id) as projects_count
@@ -1483,11 +1483,42 @@ def get_all_companies():
     """)
     result = []
     for row in companies:
+        company_id = row['id']
+        # この会社に関連する案件を取得
+        projects = fetch_all("""
+            select p.*
+            from app.projects p
+            where p.company_id = :company_id
+            order by p.id
+        """, company_id=company_id)
+        
+        company_projects = []
+        for p in projects:
+            project = {
+                'id': p['id'],
+                'name': p['name'],
+                'status': p.get('status', '進行中'),
+                'due_date': p.get('due_date').strftime('%Y-%m-%d') if p.get('due_date') else '',
+                'assignee': p.get('assignee', ''),
+                'completion_length': p.get('completion_length'),
+                'video_axis': p.get('video_axis', 'LONG'),
+                'delivered': p.get('delivered', False),
+                'delivery_date': p.get('delivery_date').strftime('%Y-%m-%d') if p.get('delivery_date') else '',
+                'progress': p.get('progress', 0),
+                'raw_material_url': p.get('raw_material_url', ''),
+                'final_video_url': p.get('final_video_url', ''),
+                'script_url': p.get('script_url', ''),
+                'paid': p.get('paid', False),
+                'notes': p.get('notes', ''),
+                'company_id': company_id
+            }
+            company_projects.append(project)
+        
         company = {
-            'id': row['id'],
+            'id': company_id,
             'name': row['name'],
             'code': row.get('code', ''),
-            'projects': [],
+            'projects': company_projects,
             'projects_count': row.get('projects_count', 0)
         }
         result.append(company)

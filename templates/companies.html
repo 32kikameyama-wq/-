@@ -30,6 +30,8 @@
                         <th class="col-projects">案件数</th>
                         <th class="col-active">進行中</th>
                         <th class="col-completed">完了</th>
+                        <th class="col-progress">平均進捗</th>
+                        <th class="col-due-date">最優先納期</th>
                         <th class="col-assignees">担当者</th>
                         <th class="col-action">操作</th>
                     </tr>
@@ -50,6 +52,28 @@
                         <td class="col-completed">
                             {% set completed_count = company.projects|selectattr('status', 'equalto', '完了')|list|length %}
                             {{ completed_count }}件
+                        </td>
+                        <td class="col-progress">
+                            {% if company.projects|length > 0 %}
+                                {% set total_progress = company.projects|sum(attribute='progress') %}
+                                {% set avg_progress = (total_progress / company.projects|length)|round(0)|int %}
+                                {{ avg_progress }}%
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td class="col-due-date">
+                            {% set due_dates = [] %}
+                            {% for project in company.projects %}
+                                {% if project.due_date and project.status != '完了' %}
+                                    {% set _ = due_dates.append(project.due_date) %}
+                                {% endif %}
+                            {% endfor %}
+                            {% if due_dates %}
+                                {{ due_dates|sort|first }}
+                            {% else %}
+                                -
+                            {% endif %}
                         </td>
                         <td class="col-assignees">
                             {% set assignees = [] %}
