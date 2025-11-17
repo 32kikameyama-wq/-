@@ -3878,32 +3878,48 @@ def import_csv():
                     if project_id:
                         existing_project = next((p for p in all_projects if str(p['id']) == str(project_id)), None)
                         if existing_project:
-                            if due_date:
-                                existing_project['due_date'] = due_date
-                            if assignee:
-                                existing_project['assignee'] = assignee
-                            if raw_material:
-                                existing_project['raw_material_url'] = raw_material
-                            if delivery_video:
-                                existing_project['final_video_url'] = delivery_video
-                            if script:
-                                existing_project['script_url'] = script
-                            if delivery_date:
-                                existing_project['delivery_date'] = delivery_date
-                            if cl_checked:
-                                existing_project['delivered'] = True
-                                existing_project['status'] = '完了'
-                                existing_project['progress'] = 100
-                            # 支払い済情報を保存（メモとして保存）
-                            if paid:
-                                existing_project['paid'] = True
-                                if 'notes' not in existing_project:
-                                    existing_project['notes'] = ''
-                                if '支払い済' not in existing_project.get('notes', ''):
-                                    existing_project['notes'] = (existing_project.get('notes', '') + ' 支払い済').strip()
+                            # データベースに案件を更新
+                            progress = 100 if cl_checked else existing_project.get('progress', 0)
+                            status = '完了' if cl_checked else existing_project.get('status', '進行中')
+                            notes = existing_project.get('notes', '')
+                            if paid and '支払い済' not in notes:
+                                notes = (notes + ' 支払い済').strip() if notes else '支払い済'
                             
-                            # タスクを自動生成・更新
-                            _sync_tasks_from_project(existing_project, assignee, due_date, cl_checked)
+                            execute("""
+                                update app.projects
+                                set due_date = :due_date,
+                                    assignee = :assignee,
+                                    raw_material_url = :raw_material_url,
+                                    final_video_url = :final_video_url,
+                                    script_url = :script_url,
+                                    delivery_date = :delivery_date,
+                                    delivered = :delivered,
+                                    status = :status,
+                                    progress = :progress,
+                                    paid = :paid,
+                                    notes = :notes,
+                                    updated_at = now()
+                                where id = :id
+                            """,
+                                id=int(project_id),
+                                due_date=due_date or existing_project.get('due_date'),
+                                assignee=assignee or existing_project.get('assignee', ''),
+                                raw_material_url=raw_material or existing_project.get('raw_material_url', ''),
+                                final_video_url=delivery_video or existing_project.get('final_video_url', ''),
+                                script_url=script or existing_project.get('script_url', ''),
+                                delivery_date=delivery_date or existing_project.get('delivery_date'),
+                                delivered=cl_checked,
+                                status=status,
+                                progress=progress,
+                                paid=paid,
+                                notes=notes
+                            )
+                            
+                            # 更新された案件を取得
+                            updated_project, _ = get_project_by_id(int(project_id))
+                            if updated_project:
+                                # タスクを自動生成・更新
+                                _sync_tasks_from_project(updated_project, assignee, due_date, cl_checked)
                             imported_count += 1
                         else:
                             # デフォルトで最初の会社に紐付け（会社がない場合は作成）
