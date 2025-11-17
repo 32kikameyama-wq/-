@@ -2042,86 +2042,95 @@ def api_project_status_history(project_id):
 @app.route('/api/projects/<int:project_id>', methods=['PUT'])
 def api_update_project(project_id):
     """案件更新API"""
-    data = request.get_json()
-    
-    # データベースから案件を取得
-    project, company = get_project_by_id(project_id)
-    if not project:
-        return jsonify({'status': 'error', 'message': '案件が見つかりません'}), 404
-    
-    # 案件名を更新する前に古い案件名を保存（タスクの案件名も更新するため）
-    old_project_name = project.get('name')
-    new_project_name = data.get('name', project.get('name'))
-    actor = g.current_user['name'] if g.current_user and g.current_user.get('name') else STATUS_HISTORY_DEFAULT_ACTOR
-    previous_status = project.get('status')
-    
-    # 進捗を計算
-    delivered = data.get('delivered', project.get('delivered', False))
-    status = data.get('status', project.get('status', '進行中'))
-    if delivered or status == '完了':
-        progress = 100
-    elif status == 'レビュー中':
-        progress = 85
-    elif status == '進行中':
-        progress = 70
-    else:
-        progress = 10
-    
-    # データベースに案件を更新
-    execute("""
-        update app.projects
-        set name = :name,
-            due_date = :due_date,
-            assignee = :assignee,
-            completion_length = :completion_length,
-            video_axis = :video_axis,
-            status = :status,
-            raw_material_url = :raw_material_url,
-            final_video_url = :final_video_url,
-            script_url = :script_url,
-            delivery_date = :delivery_date,
-            delivered = :delivered,
-            progress = :progress,
-            paid = :paid,
-            notes = :notes,
-            updated_at = now()
-        where id = :id
-    """,
-        id=project_id,
-        name=new_project_name,
-        due_date=data.get('due_date') or project.get('due_date'),
-        assignee=data.get('assignee', project.get('assignee', '')),
-        completion_length=data.get('completion_length') or project.get('completion_length'),
-        video_axis=data.get('video_axis', project.get('video_axis', 'LONG')),
-        status=status,
-        raw_material_url=data.get('raw_material_url', project.get('raw_material_url', '')),
-        final_video_url=data.get('final_video_url', project.get('final_video_url', '')),
-        script_url=data.get('script_url', project.get('script_url', '')),
-        delivery_date=data.get('delivery_date') or project.get('delivery_date'),
-        delivered=delivered,
-        progress=progress,
-        paid=data.get('paid', project.get('paid', False)),
-        notes=data.get('notes', project.get('notes', ''))
-    )
-    
-    # 案件名が変更された場合、関連するタスクの案件名も更新
-    if old_project_name and new_project_name != old_project_name:
-        for manual_task in GENERAL_TASKS:
-            if manual_task.get('project_id') == project_id:
-                manual_task['project_name'] = new_project_name
-        rebuild_task_cache()
-    
-    # 更新された案件を取得
-    updated_project, _ = get_project_by_id(project_id)
-    
-    if previous_status != status:
-        record_project_status_change(project_id, status, actor=actor)
-    
-    return jsonify({
-        'status': 'success',
-        'message': '案件を更新しました',
-        'data': updated_project
-    })
+    try:
+        data = request.get_json() or {}
+        
+        # データベースから案件を取得
+        project, company = get_project_by_id(project_id)
+        if not project:
+            return jsonify({'status': 'error', 'message': '案件が見つかりません'}), 404
+        
+        # 案件名を更新する前に古い案件名を保存（タスクの案件名も更新するため）
+        old_project_name = project.get('name')
+        new_project_name = data.get('name', project.get('name'))
+        actor = g.current_user['name'] if g.current_user and g.current_user.get('name') else STATUS_HISTORY_DEFAULT_ACTOR
+        previous_status = project.get('status')
+        
+        # 進捗を計算
+        delivered = data.get('delivered', project.get('delivered', False))
+        status = data.get('status', project.get('status', '進行中'))
+        if delivered or status == '完了':
+            progress = 100
+        elif status == 'レビュー中':
+            progress = 85
+        elif status == '進行中':
+            progress = 70
+        else:
+            progress = 10
+        
+        # データベースに案件を更新
+        execute("""
+            update app.projects
+            set name = :name,
+                due_date = :due_date,
+                assignee = :assignee,
+                completion_length = :completion_length,
+                video_axis = :video_axis,
+                status = :status,
+                raw_material_url = :raw_material_url,
+                final_video_url = :final_video_url,
+                script_url = :script_url,
+                delivery_date = :delivery_date,
+                delivered = :delivered,
+                progress = :progress,
+                paid = :paid,
+                notes = :notes,
+                updated_at = now()
+            where id = :id
+        """,
+            id=project_id,
+            name=new_project_name,
+            due_date=data.get('due_date') or project.get('due_date'),
+            assignee=data.get('assignee', project.get('assignee', '')),
+            completion_length=data.get('completion_length') or project.get('completion_length'),
+            video_axis=data.get('video_axis', project.get('video_axis', 'LONG')),
+            status=status,
+            raw_material_url=data.get('raw_material_url', project.get('raw_material_url', '')),
+            final_video_url=data.get('final_video_url', project.get('final_video_url', '')),
+            script_url=data.get('script_url', project.get('script_url', '')),
+            delivery_date=data.get('delivery_date') or project.get('delivery_date'),
+            delivered=delivered,
+            progress=progress,
+            paid=data.get('paid', project.get('paid', False)),
+            notes=data.get('notes', project.get('notes', ''))
+        )
+        
+        # 案件名が変更された場合、関連するタスクの案件名も更新
+        if old_project_name and new_project_name != old_project_name:
+            for manual_task in GENERAL_TASKS:
+                if manual_task.get('project_id') == project_id:
+                    manual_task['project_name'] = new_project_name
+            rebuild_task_cache()
+        
+        # 更新された案件を取得
+        updated_project, _ = get_project_by_id(project_id)
+        
+        if previous_status != status:
+            record_project_status_change(project_id, status, actor=actor)
+        
+        return jsonify({
+            'status': 'success',
+            'message': '案件を更新しました',
+            'data': updated_project
+        })
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Error updating project {project_id}: {error_trace}")
+        return jsonify({
+            'status': 'error',
+            'message': f'ステータスの更新中にエラーが発生しました: {str(e)}'
+        }), 500
 
 @app.route('/api/projects', methods=['POST'])
 def api_create_project():
@@ -2270,65 +2279,74 @@ def api_bulk_delete_projects():
 @app.route('/api/projects/<int:project_id>/toggle-delivered', methods=['POST'])
 def api_toggle_delivered(project_id):
     """CLチェックボックスの切り替えAPI"""
-    data = request.get_json()
-    delivered = data.get('delivered', False)
-    actor = g.current_user['name'] if g.current_user and g.current_user.get('name') else STATUS_HISTORY_DEFAULT_ACTOR
-    
-    # データベースから案件を取得
-    project, company = get_project_by_id(project_id)
-    if not project:
-        return jsonify({'status': 'error', 'message': '案件が見つかりません'}), 404
-    
-    previous_status = project.get('status')
-    
-    # 納品済みの場合、納品完了日を設定（24時切り替えで正確に日付を判定）
-    if delivered:
-        # 日本時間（JST）で現在日時を取得（24時切り替えで正確に日付を判定）
-        jst = pytz.timezone('Asia/Tokyo')
-        now_jst = datetime.now(jst)
+    try:
+        data = request.get_json() or {}
+        delivered = data.get('delivered', False)
+        actor = g.current_user['name'] if g.current_user and g.current_user.get('name') else STATUS_HISTORY_DEFAULT_ACTOR
         
-        # 日付をYYYY-MM-DD形式で取得（24時切り替えで正確に日付を判定）
-        delivery_date = now_jst.strftime('%Y-%m-%d')
-        progress = 100
-        status = '完了'
-    else:
-        delivery_date = None
-        progress = project.get('progress', 0)
-        status = project.get('status', '進行中')
-    
-    # データベースに更新
-    execute("""
-        update app.projects
-        set delivered = :delivered,
-            delivery_date = :delivery_date,
-            progress = :progress,
-            status = :status,
-            updated_at = now()
-        where id = :id
-    """,
-        id=project_id,
-        delivered=delivered,
-        delivery_date=delivery_date,
-        progress=progress,
-        status=status
-    )
-    
-    status_changed = previous_status != status
-    if status_changed:
-        changed_at = datetime.now(pytz.timezone('Asia/Tokyo')).strftime('%Y-%m-%d %H:%M') if delivered else datetime.now().strftime('%Y-%m-%d %H:%M')
-        record_project_status_change(project_id, status, actor=actor, changed_at=changed_at)
-    
-    # 更新された案件を取得
-    updated_project, _ = get_project_by_id(project_id)
-    
-    return jsonify({
-        'status': 'success',
-        'message': 'CL状態を更新しました',
-        'data': {
-            'delivered': delivered,
-            'delivery_date': project.get('delivery_date', '')
-        }
-    })
+        # データベースから案件を取得
+        project, company = get_project_by_id(project_id)
+        if not project:
+            return jsonify({'status': 'error', 'message': '案件が見つかりません'}), 404
+        
+        previous_status = project.get('status')
+        
+        # 納品済みの場合、納品完了日を設定（24時切り替えで正確に日付を判定）
+        if delivered:
+            # 日本時間（JST）で現在日時を取得（24時切り替えで正確に日付を判定）
+            jst = pytz.timezone('Asia/Tokyo')
+            now_jst = datetime.now(jst)
+            
+            # 日付をYYYY-MM-DD形式で取得（24時切り替えで正確に日付を判定）
+            delivery_date = now_jst.strftime('%Y-%m-%d')
+            progress = 100
+            status = '完了'
+        else:
+            delivery_date = None
+            progress = project.get('progress', 0)
+            status = project.get('status', '進行中')
+        
+        # データベースに更新
+        execute("""
+            update app.projects
+            set delivered = :delivered,
+                delivery_date = :delivery_date,
+                progress = :progress,
+                status = :status,
+                updated_at = now()
+            where id = :id
+        """,
+            id=project_id,
+            delivered=delivered,
+            delivery_date=delivery_date,
+            progress=progress,
+            status=status
+        )
+        
+        status_changed = previous_status != status
+        if status_changed:
+            changed_at = datetime.now(pytz.timezone('Asia/Tokyo')).strftime('%Y-%m-%d %H:%M') if delivered else datetime.now().strftime('%Y-%m-%d %H:%M')
+            record_project_status_change(project_id, status, actor=actor, changed_at=changed_at)
+        
+        # 更新された案件を取得
+        updated_project, _ = get_project_by_id(project_id)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'CL状態を更新しました',
+            'data': {
+                'delivered': delivered,
+                'delivery_date': updated_project.get('delivery_date', '') if updated_project else ''
+            }
+        })
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Error toggling delivered status for project {project_id}: {error_trace}")
+        return jsonify({
+            'status': 'error',
+            'message': f'CL状態の更新中にエラーが発生しました: {str(e)}'
+        }), 500
 
 
 @app.route('/api/projects/<int:project_id>/video-items', methods=['POST'])
