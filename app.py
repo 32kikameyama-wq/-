@@ -2642,64 +2642,64 @@ def api_update_task(task_id):
                     record_task_history(task, field, old_value, value, actor)
                     task[field] = value
 
-    if 'project_id' in data or 'project_name' in data:
-        new_project_id = data.get('project_id', task.get('project_id'))
-        new_project_name = data.get('project_name')
-        project = None
-        company_name = None
-        project_color = task.get('color')
-        if new_project_id:
-            project, company = find_project_by_id(int(new_project_id))
-            if not project:
-                return jsonify({'status': 'error', 'message': '対象の案件が見つかりません'}), 404
-            new_project_name = project.get('name')
-            company_name = company['name'] if company else None
-            company_id = company['id'] if company else project.get('company_id')
-            if company_id:
-                project_color = ensure_project_color(company_id, project)
-        elif new_project_name:
-            new_project_id = PROJECT_NAME_TO_ID.get(new_project_name)
+        if 'project_id' in data or 'project_name' in data:
+            new_project_id = data.get('project_id', task.get('project_id'))
+            new_project_name = data.get('project_name')
+            project = None
+            company_name = None
+            project_color = task.get('color')
             if new_project_id:
-                project, company = find_project_by_id(new_project_id)
+                project, company = find_project_by_id(int(new_project_id))
+                if not project:
+                    return jsonify({'status': 'error', 'message': '対象の案件が見つかりません'}), 404
+                new_project_name = project.get('name')
                 company_name = company['name'] if company else None
                 company_id = company['id'] if company else project.get('company_id')
-                if company_id and project:
+                if company_id:
                     project_color = ensure_project_color(company_id, project)
-        record_task_history(task, 'project_id', task.get('project_id'), new_project_id, actor)
-        record_task_history(task, 'project_name', task.get('project_name'), new_project_name, actor)
+            elif new_project_name:
+                new_project_id = PROJECT_NAME_TO_ID.get(new_project_name)
+                if new_project_id:
+                    project, company = find_project_by_id(new_project_id)
+                    company_name = company['name'] if company else None
+                    company_id = company['id'] if company else project.get('company_id')
+                    if company_id and project:
+                        project_color = ensure_project_color(company_id, project)
+            record_task_history(task, 'project_id', task.get('project_id'), new_project_id, actor)
+            record_task_history(task, 'project_name', task.get('project_name'), new_project_name, actor)
 
-        if new_project_id:
-            # タスクを新しいプロジェクトに移動
-            if container:
-                container.remove(task)
-            existing_tasks = [t for t in GENERAL_TASKS if t.get('project_id') == new_project_id]
-            if not task.get('order_index'):
-                task['order_index'] = len(existing_tasks) + 1
-            GENERAL_TASKS.append(task)
-            container = GENERAL_TASKS
+            if new_project_id:
+                # タスクを新しいプロジェクトに移動
+                if container:
+                    container.remove(task)
+                existing_tasks = [t for t in GENERAL_TASKS if t.get('project_id') == new_project_id]
+                if not task.get('order_index'):
+                    task['order_index'] = len(existing_tasks) + 1
+                GENERAL_TASKS.append(task)
+                container = GENERAL_TASKS
 
-        task['project_id'] = new_project_id
-        task['project_name'] = new_project_name
-        if company_name:
-            task['company_name'] = company_name
-        if project_color:
-            task['color'] = project_color
+            task['project_id'] = new_project_id
+            task['project_name'] = new_project_name
+            if company_name:
+                task['company_name'] = company_name
+            if project_color:
+                task['color'] = project_color
 
-    if 'dependencies' in data:
-        deps_payload = data['dependencies'] or []
-        normalized = []
-        for dep in deps_payload:
-            if isinstance(dep, dict):
-                dep_id = dep.get('task_id')
-                dep_type = (dep.get('type') or 'FS').upper()
-            else:
-                dep_id = dep
-                dep_type = 'FS'
-            if not dep_id or dep_id == task_id:
-                continue
-            if dep_type not in TASK_DEPENDENCY_TYPES:
-                dep_type = 'FS'
-            normalized.append({'task_id': int(dep_id), 'type': dep_type})
+        if 'dependencies' in data:
+            deps_payload = data['dependencies'] or []
+            normalized = []
+            for dep in deps_payload:
+                if isinstance(dep, dict):
+                    dep_id = dep.get('task_id')
+                    dep_type = (dep.get('type') or 'FS').upper()
+                else:
+                    dep_id = dep
+                    dep_type = 'FS'
+                if not dep_id or dep_id == task_id:
+                    continue
+                if dep_type not in TASK_DEPENDENCY_TYPES:
+                    dep_type = 'FS'
+                normalized.append({'task_id': int(dep_id), 'type': dep_type})
             record_task_history(task, 'dependencies', task.get('dependencies', []), normalized, actor)
             task['dependencies'] = normalized
 
@@ -2715,6 +2715,14 @@ def api_update_task(task_id):
             'message': 'タスクを更新しました',
             'data': task
         })
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Error updating task {task_id}: {error_trace}")
+        return jsonify({
+            'status': 'error',
+            'message': f'ステータス更新中にエラーが発生しました: {str(e)}'
+        }), 500
 
 @app.route('/api/tasks', methods=['POST'])
 @login_required
