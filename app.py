@@ -4153,9 +4153,21 @@ def import_csv():
                                 _sync_tasks_from_project(updated_project, assignee, due_date, cl_checked)
                             imported_count += 1
                         else:
-                            # ステータスを決定
-                            status = '完了' if cl_checked else '進行中'
-                            progress = 100 if cl_checked else 0
+                            # ステータスがCSVから読み込まれている場合はそれを使用、なければCLチェック状態から推測
+                            if not status or status not in ['計画中', '進行中', 'レビュー中', '完了']:
+                                status = '完了' if cl_checked else '進行中'
+                            
+                            # 進捗を計算
+                            if status == '完了' or cl_checked:
+                                progress = 100
+                            elif status == 'レビュー中':
+                                progress = 85
+                            elif status == '進行中':
+                                progress = 70
+                            elif status == '計画中':
+                                progress = 10
+                            else:
+                                progress = 0
                             
                             # データベースに案件を保存
                             execute("""
@@ -4177,7 +4189,7 @@ def import_csv():
                                 due_date=due_date or None,
                                 assignee=assignee or '未割当',
                                 completion_length=None,
-                                video_axis='LONG',
+                                video_axis=video_axis,
                                 delivered=cl_checked,
                                 delivery_date=delivery_date or None,
                                 progress=progress,
