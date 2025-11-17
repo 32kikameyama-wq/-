@@ -360,9 +360,23 @@ function submitProjectsCsvImport() {
                     </ul>
                 </div>
             `;
-            // ページをリロードしてデータを反映
+            // ページをリロードしてデータを反映（video_axisパラメータを保持）
             setTimeout(() => {
-                window.location.reload();
+                const urlParams = new URLSearchParams(window.location.search);
+                const videoAxis = urlParams.get('video_axis');
+                const companyId = urlParams.get('company_id');
+                let reloadUrl = window.location.pathname;
+                const params = [];
+                if (videoAxis) {
+                    params.push('video_axis=' + videoAxis);
+                }
+                if (companyId) {
+                    params.push('company_id=' + companyId);
+                }
+                if (params.length > 0) {
+                    reloadUrl += '?' + params.join('&');
+                }
+                window.location.href = reloadUrl;
             }, 2000);
         } else {
             resultDiv.innerHTML = `
