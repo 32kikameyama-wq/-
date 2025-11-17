@@ -2135,11 +2135,12 @@ def api_update_project(project_id):
 @app.route('/api/projects', methods=['POST'])
 def api_create_project():
     """案件作成API"""
-    data = request.get_json()
-    
-    # バリデーション
-    if not data.get('name') or not data.get('due_date') or not data.get('assignee'):
-        return jsonify({'status': 'error', 'message': '企画タイトル、納期、担当は必須です'}), 400
+    try:
+        data = request.get_json() or {}
+        
+        # バリデーション
+        if not data.get('name') or not data.get('due_date') or not data.get('assignee'):
+            return jsonify({'status': 'error', 'message': '企画タイトル、納期、担当は必須です'}), 400
     
     # 区分のデフォルト値
     video_axis = data.get('video_axis', 'LONG')
