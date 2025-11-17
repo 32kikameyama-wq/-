@@ -3477,18 +3477,25 @@ def editor_dashboard():
 def editor_projects():
     """編集者向け案件一覧"""
     company_id = request.args.get('company_id', type=int)
+    video_axis = request.args.get('video_axis', '')
     all_projects = get_all_projects()
 
+    # 会社フィルタリング
     if company_id:
         filtered_projects = [p for p in all_projects if p.get('company_id') == company_id]
     else:
         filtered_projects = all_projects
+    
+    # 動画種類フィルタリング
+    if video_axis:
+        filtered_projects = [p for p in filtered_projects if p.get('video_axis', 'LONG') == video_axis]
 
     return render_template(
         'projects.html',
         projects=filtered_projects,
         companies=get_all_companies(),
         selected_company_id=company_id,
+        selected_video_axis=video_axis,
         project_detail_endpoint='editor_project_detail',
         allow_project_actions=False,
         base_template='editor_layout.html'
