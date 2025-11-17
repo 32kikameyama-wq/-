@@ -55,7 +55,10 @@
                         </td>
                         <td class="col-progress">
                             {% if company.projects|length > 0 %}
-                                {% set total_progress = company.projects|sum(attribute='progress') %}
+                                {% set total_progress = 0 %}
+                                {% for project in company.projects %}
+                                    {% set total_progress = total_progress + (project.progress|int) %}
+                                {% endfor %}
                                 {% set avg_progress = (total_progress / company.projects|length)|round(0)|int %}
                                 {{ avg_progress }}%
                             {% else %}
