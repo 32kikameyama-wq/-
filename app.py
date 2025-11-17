@@ -2068,6 +2068,19 @@ def api_update_project(project_id):
             progress = 10
         
         # データベースに案件を更新
+        # 日付フィールドの空文字列をNoneに変換（PostgreSQLのdate型は空文字列を受け付けない）
+        due_date_value = data.get('due_date') or project.get('due_date')
+        if due_date_value == '':
+            due_date_value = None
+        
+        delivery_date_value = data.get('delivery_date') or project.get('delivery_date')
+        if delivery_date_value == '':
+            delivery_date_value = None
+        
+        completion_length_value = data.get('completion_length') or project.get('completion_length')
+        if completion_length_value == '':
+            completion_length_value = None
+        
         execute("""
             update app.projects
             set name = :name,
@@ -2089,15 +2102,15 @@ def api_update_project(project_id):
         """,
             id=project_id,
             name=new_project_name,
-            due_date=data.get('due_date') or project.get('due_date'),
+            due_date=due_date_value,
             assignee=data.get('assignee', project.get('assignee', '')),
-            completion_length=data.get('completion_length') or project.get('completion_length'),
+            completion_length=completion_length_value,
             video_axis=data.get('video_axis', project.get('video_axis', 'LONG')),
             status=status,
             raw_material_url=data.get('raw_material_url', project.get('raw_material_url', '')),
             final_video_url=data.get('final_video_url', project.get('final_video_url', '')),
             script_url=data.get('script_url', project.get('script_url', '')),
-            delivery_date=data.get('delivery_date') or project.get('delivery_date'),
+            delivery_date=delivery_date_value,
             delivered=delivered,
             progress=progress,
             paid=data.get('paid', project.get('paid', False)),
@@ -2168,6 +2181,11 @@ def api_create_project():
             progress = 10
         
         # データベースに案件を保存
+        # 日付フィールドの空文字列をNoneに変換（PostgreSQLのdate型は空文字列を受け付けない）
+        due_date_value = data.get('due_date') if data.get('due_date') else None
+        delivery_date_value = data.get('delivery_date') if data.get('delivery_date') else None
+        completion_length_value = data.get('completion_length') if data.get('completion_length') else None
+        
         execute("""
             insert into app.projects (
                 company_id, name, due_date, assignee, completion_length,
@@ -2181,15 +2199,15 @@ def api_create_project():
         """,
             company_id=company_id,
             name=data['name'],
-            due_date=data['due_date'],
+            due_date=due_date_value,
             assignee=data['assignee'],
-            completion_length=data.get('completion_length'),
+            completion_length=completion_length_value,
             video_axis=video_axis,
             status=status,
             raw_material_url=data.get('raw_material_url', ''),
             final_video_url=data.get('final_video_url', ''),
             script_url=data.get('script_url', ''),
-            delivery_date=data.get('delivery_date', ''),
+            delivery_date=delivery_date_value,
             delivered=delivered,
             progress=progress,
             paid=data.get('paid', False),
