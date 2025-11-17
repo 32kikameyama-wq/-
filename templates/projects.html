@@ -119,11 +119,14 @@
         </div>
         {% if allow_project_actions|default(True) %}
         <div class="table-actions">
-            {% if request.args.get('company_id') %}
-            <button class="btn btn-primary" onclick="addProject({{ request.args.get('company_id') }})">新規案件を追加</button>
-            {% else %}
-            <button class="btn btn-primary" onclick="addProject()">新規案件を追加</button>
-            {% endif %}
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button class="btn btn-primary" onclick="showCsvUploadModal()">CSVから一括追加</button>
+                {% if request.args.get('company_id') %}
+                <button class="btn btn-secondary" onclick="addProject({{ request.args.get('company_id') }})">新規案件を追加</button>
+                {% else %}
+                <button class="btn btn-secondary" onclick="addProject()">新規案件を追加</button>
+                {% endif %}
+            </div>
         </div>
         {% endif %}
     </section>
@@ -287,7 +290,108 @@ function editProject(projectId) {
             alert('案件データの取得中にエラーが発生しました。');
         });
 }
+
+// CSVアップロードモーダル
+function showCsvUploadModal() {
+    document.getElementById('csv-upload-modal').style.display = 'flex';
+    document.getElementById('projects-csv-import-form').reset();
+    document.getElementById('projects-import-result').style.display = 'none';
+}
+
+function closeCsvUploadModal() {
+    document.getElementById('csv-upload-modal').style.display = 'none';
+}
+
+function submitProjectsCsvImport() {
+    const formData = new FormData();
+    const fileInput = document.getElementById('projects-csv-file');
+    const importType = document.getElementById('projects-import-type').value;
+    const resultDiv = document.getElementById('projects-import-result');
+    
+    if (!fileInput.files[0]) {
+        alert('CSVファイルを選択してください');
+        return;
+    }
+    
+    formData.append('csv_file', fileInput.files[0]);
+    formData.append('import_type', importType);
+    
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = '<p>インポート中...</p>';
+    
+    fetch('/api/import/csv', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.status === 'success') {
+            resultDiv.innerHTML = `
+                <div class="success-message">
+                    <h4>インポート成功</h4>
+                    <p>${result.message}</p>
+                    <ul>
+                        <li>インポート件数: ${result.data.imported_count}件</li>
+                        <li>スキップ件数: ${result.data.skipped_count}件</li>
+                    </ul>
+                </div>
+            `;
+            // ページをリロードしてデータを反映
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } else {
+            resultDiv.innerHTML = `
+                <div class="error-message">
+                    <h4>インポートエラー</h4>
+                    <p>${result.message}</p>
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        resultDiv.innerHTML = `
+            <div class="error-message">
+                <h4>エラーが発生しました</h4>
+                <p>${error.message}</p>
+            </div>
+        `;
+    });
+}
 </script>
+
+<!-- CSVアップロードモーダル -->
+<div id="csv-upload-modal" class="gantt-modal" style="display: none;">
+    <div class="gantt-modal-overlay" onclick="closeCsvUploadModal()"></div>
+    <div class="gantt-modal-content">
+        <div class="gantt-modal-header">
+            <h3>CSVから案件を一括追加</h3>
+            <button class="gantt-modal-close" onclick="closeCsvUploadModal()">×</button>
+        </div>
+        <div class="gantt-modal-body">
+            <form id="projects-csv-import-form" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="projects-csv-file">CSVファイルを選択</label>
+                    <input type="file" id="projects-csv-file" name="csv_file" accept=".csv" required>
+                    <small class="form-text">対応形式: 案件管理シート、動画編集管理シート</small>
+                </div>
+                <div class="form-group">
+                    <label for="projects-import-type">インポートタイプ</label>
+                    <select id="projects-import-type" name="import_type" required>
+                        <option value="projects">案件管理シート（ID、企画タイトル、動画素材、完成動画、台本、納期、担当、CL✓/CL✔、納品完了日、支払い済）</option>
+                        <option value="video_editing">動画編集管理シート（納期、ID、企画タイトル、完成尺、担当、納品済、元素材、納品動画、画面キャプチャ素材、完パケ）</option>
+                        <option value="projects_alt">案件管理シート（別形式：ID、企画タイトル、納期、担当、CL✔、動画素材、完成動画、台本、納品完了日、支払い済）</option>
+                    </select>
+                </div>
+                <div id="projects-import-result" class="import-result" style="display: none; margin-top: 15px;"></div>
+            </form>
+        </div>
+        <div class="gantt-modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeCsvUploadModal()">キャンセル</button>
+            <button type="button" class="btn btn-primary" onclick="submitProjectsCsvImport()">インポート実行</button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 
