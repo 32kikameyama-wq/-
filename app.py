@@ -2141,76 +2141,84 @@ def api_create_project():
         # バリデーション
         if not data.get('name') or not data.get('due_date') or not data.get('assignee'):
             return jsonify({'status': 'error', 'message': '企画タイトル、納期、担当は必須です'}), 400
-    
-    # 区分のデフォルト値
-    video_axis = data.get('video_axis', 'LONG')
-    if video_axis not in ['LONG', 'SHORT']:
-        video_axis = 'LONG'
-    
-    company_id = data.get('company_id')
-    if not company_id:
-        return jsonify({'status': 'error', 'message': '会社IDは必須です'}), 400
-    
-    # 会社を検索
-    company = get_company_by_id(company_id)
-    if not company:
-        return jsonify({'status': 'error', 'message': '会社が見つかりません'}), 404
-    
-    # 進捗を計算
-    status = data.get('status', '進行中')
-    delivered = data.get('delivered', False)
-    if delivered or status == '完了':
-        progress = 100
-    elif status == 'レビュー中':
-        progress = 85
-    elif status == '進行中':
-        progress = 70
-    else:
-        progress = 10
-    
-    # データベースに案件を保存
-    execute("""
-        insert into app.projects (
-            company_id, name, due_date, assignee, completion_length,
-            video_axis, status, raw_material_url, final_video_url,
-            script_url, delivery_date, delivered, progress, paid, notes
-        ) values (
-            :company_id, :name, :due_date, :assignee, :completion_length,
-            :video_axis, :status, :raw_material_url, :final_video_url,
-            :script_url, :delivery_date, :delivered, :progress, :paid, :notes
+        
+        # 区分のデフォルト値
+        video_axis = data.get('video_axis', 'LONG')
+        if video_axis not in ['LONG', 'SHORT']:
+            video_axis = 'LONG'
+        
+        company_id = data.get('company_id')
+        if not company_id:
+            return jsonify({'status': 'error', 'message': '会社IDは必須です'}), 400
+        
+        # 会社を検索
+        company = get_company_by_id(company_id)
+        if not company:
+            return jsonify({'status': 'error', 'message': '会社が見つかりません'}), 404
+        
+        # 進捗を計算
+        status = data.get('status', '進行中')
+        delivered = data.get('delivered', False)
+        if delivered or status == '完了':
+            progress = 100
+        elif status == 'レビュー中':
+            progress = 85
+        elif status == '進行中':
+            progress = 70
+        else:
+            progress = 10
+        
+        # データベースに案件を保存
+        execute("""
+            insert into app.projects (
+                company_id, name, due_date, assignee, completion_length,
+                video_axis, status, raw_material_url, final_video_url,
+                script_url, delivery_date, delivered, progress, paid, notes
+            ) values (
+                :company_id, :name, :due_date, :assignee, :completion_length,
+                :video_axis, :status, :raw_material_url, :final_video_url,
+                :script_url, :delivery_date, :delivered, :progress, :paid, :notes
+            )
+        """,
+            company_id=company_id,
+            name=data['name'],
+            due_date=data['due_date'],
+            assignee=data['assignee'],
+            completion_length=data.get('completion_length'),
+            video_axis=video_axis,
+            status=status,
+            raw_material_url=data.get('raw_material_url', ''),
+            final_video_url=data.get('final_video_url', ''),
+            script_url=data.get('script_url', ''),
+            delivery_date=data.get('delivery_date', ''),
+            delivered=delivered,
+            progress=progress,
+            paid=data.get('paid', False),
+            notes=data.get('notes', '')
         )
-    """,
-        company_id=company_id,
-        name=data['name'],
-        due_date=data['due_date'],
-        assignee=data['assignee'],
-        completion_length=data.get('completion_length'),
-        video_axis=video_axis,
-        status=status,
-        raw_material_url=data.get('raw_material_url', ''),
-        final_video_url=data.get('final_video_url', ''),
-        script_url=data.get('script_url', ''),
-        delivery_date=data.get('delivery_date', ''),
-        delivered=delivered,
-        progress=progress,
-        paid=data.get('paid', False),
-        notes=data.get('notes', '')
-    )
-    
-    # 作成された案件を取得
-    all_projects = get_all_projects()
-    new_project = all_projects[-1] if all_projects else None
-    
-    if new_project:
-        actor = g.current_user['name'] if g.current_user and g.current_user.get('name') else STATUS_HISTORY_DEFAULT_ACTOR
-        record_project_status_change(new_project['id'], status, actor=actor)
-        _sync_tasks_from_project(new_project, data['assignee'], data['due_date'], delivered)
-    
-    return jsonify({
-        'status': 'success',
-        'message': '案件を追加しました',
-        'data': new_project
-    })
+        
+        # 作成された案件を取得
+        all_projects = get_all_projects()
+        new_project = all_projects[-1] if all_projects else None
+        
+        if new_project:
+            actor = g.current_user['name'] if g.current_user and g.current_user.get('name') else STATUS_HISTORY_DEFAULT_ACTOR
+            record_project_status_change(new_project['id'], status, actor=actor)
+            _sync_tasks_from_project(new_project, data['assignee'], data['due_date'], delivered)
+        
+        return jsonify({
+            'status': 'success',
+            'message': '案件を追加しました',
+            'data': new_project
+        })
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Error creating project: {error_trace}")
+        return jsonify({
+            'status': 'error',
+            'message': f'案件の作成中にエラーが発生しました: {str(e)}'
+        }), 500
 
 @app.route('/api/projects/bulk-delete', methods=['POST'])
 @login_required
