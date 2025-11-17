@@ -3998,8 +3998,21 @@ def import_csv():
                     except:
                         completion_length_int = None
                     
-                    # ステータスを決定
-                    status = '完了' if delivered else '進行中'
+                    # ステータスがCSVから読み込まれている場合はそれを使用、なければ納品済み状態から推測
+                    if not status or status not in ['計画中', '進行中', 'レビュー中', '完了']:
+                        status = '完了' if delivered else '進行中'
+                    
+                    # 進捗を計算
+                    if status == '完了' or delivered:
+                        progress = 100
+                    elif status == 'レビュー中':
+                        progress = 85
+                    elif status == '進行中':
+                        progress = 70
+                    elif status == '計画中':
+                        progress = 10
+                    else:
+                        progress = 0
                     
                     # データベースに案件を保存
                     execute("""
@@ -4019,10 +4032,10 @@ def import_csv():
                         due_date=due_date or None,
                         assignee=assignee or '未割当',
                         completion_length=completion_length_int,
-                        video_axis='LONG',
+                        video_axis=video_axis,
                         delivered=delivered,
                         delivery_date=None,
-                        progress=100 if delivered else 0,
+                        progress=progress,
                         raw_material_url=raw_material,
                         final_video_url=delivery_video,
                         script_url=''
