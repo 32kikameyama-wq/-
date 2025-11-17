@@ -142,7 +142,14 @@ function updateTaskStatus(taskId, status) {
             status: status
         })
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.message || 'ステータス更新中にエラーが起きました');
+            });
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.status === 'success') {
             console.log('タスクステータスを更新しました');
@@ -150,16 +157,37 @@ function updateTaskStatus(taskId, status) {
             const row = document.querySelector(`tr[data-task-id="${taskId}"]`);
             if (row) {
                 row.setAttribute('data-status', status);
+                // ステータスが「完了」の場合、進捗も100%に更新
+                if (status === '完了') {
+                    const progressInput = row.querySelector('.progress-input');
+                    if (progressInput) {
+                        progressInput.value = 100;
+                    }
+                }
             }
         } else {
-            alert('エラー: ' + data.message);
-            location.reload();
+            alert('エラー: ' + (data.message || 'ステータス更新中にエラーが起きました'));
+            // エラー時はリロードせず、元の値に戻す
+            const row = document.querySelector(`tr[data-task-id="${taskId}"]`);
+            if (row) {
+                const statusSelect = row.querySelector('.status-select');
+                if (statusSelect) {
+                    statusSelect.value = row.getAttribute('data-status');
+                }
+            }
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('エラーが発生しました');
-        location.reload();
+        alert('ステータス更新中にエラーが起きました: ' + error.message);
+        // エラー時はリロードせず、元の値に戻す
+        const row = document.querySelector(`tr[data-task-id="${taskId}"]`);
+        if (row) {
+            const statusSelect = row.querySelector('.status-select');
+            if (statusSelect) {
+                statusSelect.value = row.getAttribute('data-status');
+            }
+        }
     });
 }
 

@@ -1065,10 +1065,14 @@ def find_task(task_id: int):
 
 
 def record_task_history(task: dict, field: str, old_value, new_value, actor: str):
+    """タスクの変更履歴を記録"""
     if old_value == new_value:
         return
+    # historyキーが存在しない場合は初期化
+    if 'history' not in task:
+        task['history'] = []
     entry = {
-        'id': len(task.setdefault('history', [])) + 1,
+        'id': len(task['history']) + 1,
         'field': field,
         'old': old_value,
         'new': new_value,
@@ -1076,6 +1080,9 @@ def record_task_history(task: dict, field: str, old_value, new_value, actor: str
         'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M')
     }
     task['history'].insert(0, entry)
+    # 履歴が多すぎる場合は古いものを削除（最新100件まで保持）
+    if len(task['history']) > 100:
+        task['history'] = task['history'][:100]
 
 
 def update_task_metadata(task: dict, actor: str):
@@ -2588,35 +2595,52 @@ def api_task_detail(task_id):
 @role_required('admin', 'editor')
 def api_update_task(task_id):
     """タスク更新API"""
-    data = request.get_json() or {}
-    task, container = find_task_with_container(task_id)
-    
-    if not task:
-        return jsonify({'status': 'error', 'message': 'タスクが見つかりません'}), 404
-    
-    actor = g.current_user['name'] if g.current_user else 'システム'
+    try:
+        data = request.get_json() or {}
+        task, container = find_task_with_container(task_id)
+        
+        if not task:
+            return jsonify({'status': 'error', 'message': 'タスクが見つかりません'}), 404
+        
+        actor = g.current_user['name'] if g.current_user else 'システム'
 
-    updatable_fields = [
-        'title', 'type', 'status', 'assignee', 'due_date', 'priority',
-        'progress', 'plan_start', 'plan_end', 'actual_start', 'actual_end',
-        'order_index', 'notes'
-    ]
+        updatable_fields = [
+            'title', 'type', 'status', 'assignee', 'due_date', 'priority',
+            'progress', 'plan_start', 'plan_end', 'actual_start', 'actual_end',
+            'order_index', 'notes'
+        ]
 
-    for field in updatable_fields:
-        if field in data:
-            value = data[field]
-            if field == 'progress' and value is not None:
-                try:
-                    value = int(value)
-                except (TypeError, ValueError):
-                    value = task.get(field, 0)
-            if field == 'order_index' and value is not None:
-                try:
-                    value = int(value)
-                except (TypeError, ValueError):
-                    value = task.get(field)
-            record_task_history(task, field, task.get(field), value, actor)
-            task[field] = value
+        # ステータスが「完了」に変更される場合の特別処理
+        new_status = data.get('status')
+        old_status = task.get('status')
+        if new_status == '完了' and old_status != '完了':
+            # 進捗を100%に設定（明示的に指定されていない場合）
+            if 'progress' not in data:
+                data['progress'] = 100
+            # 実際の終了日を設定（未設定の場合）
+            if not task.get('actual_end'):
+                data['actual_end'] = datetime.now().strftime('%Y-%m-%d')
+
+        for field in updatable_fields:
+            if field in data:
+                value = data[field]
+                if field == 'progress' and value is not None:
+                    try:
+                        value = int(value)
+                        # 進捗は0-100の範囲に制限
+                        value = max(0, min(100, value))
+                    except (TypeError, ValueError):
+                        value = task.get(field, 0)
+                if field == 'order_index' and value is not None:
+                    try:
+                        value = int(value)
+                    except (TypeError, ValueError):
+                        value = task.get(field)
+                # 履歴を記録（値が変更された場合のみ）
+                old_value = task.get(field)
+                if old_value != value:
+                    record_task_history(task, field, old_value, value, actor)
+                    task[field] = value
 
     if 'project_id' in data or 'project_name' in data:
         new_project_id = data.get('project_id', task.get('project_id'))
