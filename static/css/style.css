@@ -1918,6 +1918,16 @@ section h3 {
     width: 8%;
 }
 
+.col-progress {
+    width: 10%;
+    text-align: center;
+}
+
+.col-due-date {
+    width: 12%;
+    text-align: center;
+}
+
 .col-assignees {
     width: 15%;
 }
