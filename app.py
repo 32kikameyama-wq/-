@@ -3826,11 +3826,33 @@ def import_csv():
                         existing_project = next((p for p in all_projects if str(p['id']) == str(project_id)), None)
                         if existing_project:
                             # データベースに案件を更新
-                            progress = 100 if cl_checked else existing_project.get('progress', 0)
-                            status = '完了' if cl_checked else existing_project.get('status', '進行中')
+                            # ステータスがCSVから読み込まれている場合はそれを使用、なければCLチェック状態から推測
+                            if not status or status not in ['計画中', '進行中', 'レビュー中', '完了']:
+                                status = '完了' if cl_checked else existing_project.get('status', '進行中')
+                            
+                            # 進捗を計算
+                            if status == '完了' or cl_checked:
+                                progress = 100
+                            elif status == 'レビュー中':
+                                progress = 85
+                            elif status == '進行中':
+                                progress = 70
+                            elif status == '計画中':
+                                progress = 10
+                            else:
+                                progress = existing_project.get('progress', 0)
+                            
                             notes = existing_project.get('notes', '')
                             if paid and '支払い済' not in notes:
                                 notes = (notes + ' 支払い済').strip() if notes else '支払い済'
+                            
+                            # CSVから読み込んだ値を優先（空でない場合のみ更新）
+                            final_due_date = due_date if due_date else existing_project.get('due_date')
+                            final_assignee = assignee if assignee else existing_project.get('assignee', '')
+                            final_raw_material = raw_material if raw_material else existing_project.get('raw_material_url', '')
+                            final_delivery_video = delivery_video if delivery_video else existing_project.get('final_video_url', '')
+                            final_script = script if script else existing_project.get('script_url', '')
+                            final_delivery_date = delivery_date if delivery_date else existing_project.get('delivery_date')
                             
                             execute("""
                                 update app.projects
@@ -3845,21 +3867,23 @@ def import_csv():
                                     progress = :progress,
                                     paid = :paid,
                                     notes = :notes,
+                                    company_id = :company_id,
                                     updated_at = now()
                                 where id = :id
                             """,
                                 id=int(project_id),
-                                due_date=due_date or existing_project.get('due_date'),
-                                assignee=assignee or existing_project.get('assignee', ''),
-                                raw_material_url=raw_material or existing_project.get('raw_material_url', ''),
-                                final_video_url=delivery_video or existing_project.get('final_video_url', ''),
-                                script_url=script or existing_project.get('script_url', ''),
-                                delivery_date=delivery_date or existing_project.get('delivery_date'),
+                                due_date=final_due_date,
+                                assignee=final_assignee,
+                                raw_material_url=final_raw_material,
+                                final_video_url=final_delivery_video,
+                                script_url=final_script,
+                                delivery_date=final_delivery_date,
                                 delivered=cl_checked,
                                 status=status,
                                 progress=progress,
                                 paid=paid,
-                                notes=notes
+                                notes=notes,
+                                company_id=company_id_int
                             )
                             
                             # 更新された案件を取得
@@ -3870,8 +3894,21 @@ def import_csv():
                             imported_count += 1
                         else:
                             # 新規案件を作成（データベースに保存）
+                            # ステータスがCSVから読み込まれている場合はそれを使用、なければCLチェック状態から推測
+                            if not status or status not in ['計画中', '進行中', 'レビュー中', '完了']:
+                                status = '完了' if cl_checked else '進行中'
+                            
                             # 進捗を計算
-                            progress = 100 if cl_checked else (50 if status == '進行中' else 0)
+                            if status == '完了' or cl_checked:
+                                progress = 100
+                            elif status == 'レビュー中':
+                                progress = 85
+                            elif status == '進行中':
+                                progress = 70
+                            elif status == '計画中':
+                                progress = 10
+                            else:
+                                progress = 0
                             
                             # データベースに案件を保存
                             execute("""
@@ -4018,10 +4055,33 @@ def import_csv():
                         existing_project = next((p for p in all_projects if str(p['id']) == str(project_id)), None)
                         if existing_project:
                             # データベースに案件を更新
-                            progress = 100 if cl_checked else existing_project.get('progress', 0)
+                            # ステータスがCSVから読み込まれている場合はそれを使用、なければCLチェック状態から推測
+                            if not status or status not in ['計画中', '進行中', 'レビュー中', '完了']:
+                                status = '完了' if cl_checked else existing_project.get('status', '進行中')
+                            
+                            # 進捗を計算
+                            if status == '完了' or cl_checked:
+                                progress = 100
+                            elif status == 'レビュー中':
+                                progress = 85
+                            elif status == '進行中':
+                                progress = 70
+                            elif status == '計画中':
+                                progress = 10
+                            else:
+                                progress = existing_project.get('progress', 0)
+                            
                             notes = existing_project.get('notes', '')
                             if paid and '支払い済' not in notes:
                                 notes = (notes + ' 支払い済').strip() if notes else '支払い済'
+                            
+                            # CSVから読み込んだ値を優先（空でない場合のみ更新）
+                            final_due_date = due_date if due_date else existing_project.get('due_date')
+                            final_assignee = assignee if assignee else existing_project.get('assignee', '')
+                            final_raw_material = raw_material if raw_material else existing_project.get('raw_material_url', '')
+                            final_delivery_video = delivery_video if delivery_video else existing_project.get('final_video_url', '')
+                            final_script = script if script else existing_project.get('script_url', '')
+                            final_delivery_date = delivery_date if delivery_date else existing_project.get('delivery_date')
                             
                             execute("""
                                 update app.projects
@@ -4041,12 +4101,12 @@ def import_csv():
                                 where id = :id
                             """,
                                 id=int(project_id),
-                                due_date=due_date or existing_project.get('due_date'),
-                                assignee=assignee or existing_project.get('assignee', ''),
-                                raw_material_url=raw_material or existing_project.get('raw_material_url', ''),
-                                final_video_url=delivery_video or existing_project.get('final_video_url', ''),
-                                script_url=script or existing_project.get('script_url', ''),
-                                delivery_date=delivery_date or existing_project.get('delivery_date'),
+                                due_date=final_due_date,
+                                assignee=final_assignee,
+                                raw_material_url=final_raw_material,
+                                final_video_url=final_delivery_video,
+                                script_url=final_script,
+                                delivery_date=final_delivery_date,
                                 delivered=cl_checked,
                                 status=status,
                                 progress=progress,
