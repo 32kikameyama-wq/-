@@ -1684,7 +1684,7 @@ def index():
     # 会社ごとの統計
     company_stats = []
     for company in get_all_companies():
-        company_projects = company['projects']
+        company_projects = [p for p in all_projects if p.get('company_id') == company['id']]
         company_stats.append({
             'company': company,
             'total': len(company_projects),
@@ -2717,8 +2717,9 @@ def gather_finance_report_data():
         payout_by_status[payout['status_label']]['total'] += payout['amount']
 
     companies_summary = []
+    all_projects_for_report = get_all_projects()
     for company in get_all_companies():
-        projects = company.get('projects', [])
+        projects = [p for p in all_projects_for_report if p.get('company_id') == company['id']]
         completed = len([p for p in projects if p.get('status') == '完了' or p.get('delivered')])
         in_progress = len([p for p in projects if p.get('status') in {'進行中', 'レビュー中'}])
         companies_summary.append({
