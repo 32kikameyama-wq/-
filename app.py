@@ -300,6 +300,45 @@ def ensure_tables():
         """
         create index if not exists idx_training_video_progress_status
         on app.training_video_progress(status);
+        """,
+        """
+        create table if not exists app.companies (
+            id serial primary key,
+            name varchar(255) not null,
+            code varchar(100) unique,
+            created_at timestamp default now(),
+            updated_at timestamp default now()
+        );
+        """,
+        """
+        create table if not exists app.projects (
+            id serial primary key,
+            company_id integer references app.companies(id) on delete cascade,
+            name varchar(255) not null,
+            status varchar(50) not null default '進行中',
+            due_date date,
+            assignee varchar(255),
+            completion_length integer,
+            video_axis varchar(10) default 'LONG',
+            delivered boolean default false,
+            delivery_date date,
+            progress integer default 0,
+            raw_material_url text,
+            final_video_url text,
+            script_url text,
+            paid boolean default false,
+            notes text,
+            created_at timestamp default now(),
+            updated_at timestamp default now()
+        );
+        """,
+        """
+        create index if not exists idx_projects_company_id
+        on app.projects(company_id);
+        """,
+        """
+        create index if not exists idx_projects_status
+        on app.projects(status);
         """
     ]
     for statement in statements:
@@ -1432,16 +1471,109 @@ def parse_date_safe(value: str | None):
 
 
 # 全案件をフラット化（全社統合ビュー用）
+def get_all_companies():
+    """データベースから全会社を取得"""
+    companies = fetch_all("""
+        select c.*, 
+               count(p.id) as projects_count
+        from app.companies c
+        left join app.projects p on p.company_id = c.id
+        group by c.id
+        order by c.id
+    """)
+    result = []
+    for row in companies:
+        company = {
+            'id': row['id'],
+            'name': row['name'],
+            'code': row.get('code', ''),
+            'projects': [],
+            'projects_count': row.get('projects_count', 0)
+        }
+        result.append(company)
+    return result
+
+
 def get_all_projects():
-    """全会社の案件を統合して返す"""
-    all_projects = []
-    for company in SAMPLE_COMPANIES:
-        for project in company['projects']:
-            project_copy = project.copy()
-            project_copy['client_name'] = company['name']
-            project_copy['company_id'] = company['id']
-            all_projects.append(project_copy)
-    return all_projects
+    """データベースから全案件を取得"""
+    projects = fetch_all("""
+        select p.*, c.name as client_name, c.id as company_id
+        from app.projects p
+        left join app.companies c on c.id = p.company_id
+        order by p.id
+    """)
+    result = []
+    for row in projects:
+        project = {
+            'id': row['id'],
+            'name': row['name'],
+            'status': row.get('status', '進行中'),
+            'due_date': row.get('due_date').strftime('%Y-%m-%d') if row.get('due_date') else '',
+            'assignee': row.get('assignee', ''),
+            'completion_length': row.get('completion_length'),
+            'video_axis': row.get('video_axis', 'LONG'),
+            'delivered': row.get('delivered', False),
+            'delivery_date': row.get('delivery_date').strftime('%Y-%m-%d') if row.get('delivery_date') else '',
+            'progress': row.get('progress', 0),
+            'raw_material_url': row.get('raw_material_url', ''),
+            'final_video_url': row.get('final_video_url', ''),
+            'script_url': row.get('script_url', ''),
+            'paid': row.get('paid', False),
+            'notes': row.get('notes', ''),
+            'client_name': row.get('client_name', ''),
+            'company_id': row.get('company_id')
+        }
+        result.append(project)
+    return result
+
+
+def get_company_by_id(company_id: int):
+    """データベースから会社を取得"""
+    company = fetch_one("select * from app.companies where id=:id", id=company_id)
+    if not company:
+        return None
+    return {
+        'id': company['id'],
+        'name': company['name'],
+        'code': company.get('code', ''),
+        'projects': []
+    }
+
+
+def get_project_by_id(project_id: int):
+    """データベースから案件を取得"""
+    project = fetch_one("""
+        select p.*, c.name as client_name, c.id as company_id
+        from app.projects p
+        left join app.companies c on c.id = p.company_id
+        where p.id=:id
+    """, id=project_id)
+    if not project:
+        return None, None
+    company = {
+        'id': project.get('company_id'),
+        'name': project.get('client_name', '')
+    } if project.get('company_id') else None
+    return {
+        'id': project['id'],
+        'name': project['name'],
+        'status': project.get('status', '進行中'),
+        'due_date': project.get('due_date').strftime('%Y-%m-%d') if project.get('due_date') else '',
+        'assignee': project.get('assignee', ''),
+        'completion_length': project.get('completion_length'),
+        'video_axis': project.get('video_axis', 'LONG'),
+        'delivered': project.get('delivered', False),
+        'delivery_date': project.get('delivery_date').strftime('%Y-%m-%d') if project.get('delivery_date') else '',
+        'progress': project.get('progress', 0),
+        'raw_material_url': project.get('raw_material_url', ''),
+        'final_video_url': project.get('final_video_url', ''),
+        'script_url': project.get('script_url', ''),
+        'paid': project.get('paid', False),
+        'notes': project.get('notes', ''),
+        'client_name': project.get('client_name', ''),
+        'company_id': project.get('company_id')
+    }, company
+
 
 SAMPLE_PROJECTS = get_all_projects()
 PROJECT_NAME_TO_ID = {project['name']: project['id'] for project in SAMPLE_PROJECTS}
@@ -1452,11 +1584,7 @@ for asset in SAMPLE_ASSETS:
 
 
 def find_project_by_id(project_id: int):
-    for company in SAMPLE_COMPANIES:
-        for project in company['projects']:
-            if project['id'] == project_id:
-                return project, company
-    return None, None
+    return get_project_by_id(project_id)
 
 
 def ensure_video_items(project_id: int, project: dict = None):
@@ -1555,7 +1683,7 @@ def index():
     
     # 会社ごとの統計
     company_stats = []
-    for company in SAMPLE_COMPANIES:
+    for company in get_all_companies():
         company_projects = company['projects']
         company_stats.append({
             'company': company,
@@ -1586,7 +1714,7 @@ def index():
         'active_projects': active_projects,
         'completed_projects': completed_projects,
         'pending_projects': pending_projects,
-        'total_companies': len(SAMPLE_COMPANIES),
+        'total_companies': len(get_all_companies()),
         'total_tasks': total_tasks,
         'active_tasks': active_tasks,
         'completed_tasks': completed_tasks,
@@ -1610,7 +1738,7 @@ def projects():
     return render_template(
         'projects.html',
         projects=filtered_projects,
-        companies=SAMPLE_COMPANIES,
+        companies=get_all_companies(),
         selected_company_id=company_id,
         project_detail_endpoint='project_detail',
         allow_project_actions=True,
@@ -1622,7 +1750,7 @@ def companies():
     """会社一覧"""
     return render_template(
         'companies.html',
-        companies=SAMPLE_COMPANIES,
+        companies=get_all_companies(),
         company_detail_endpoint='company_detail',
         allow_company_actions=True,
         base_template='layout.html'
@@ -1631,9 +1759,13 @@ def companies():
 @app.route('/companies/<int:company_id>')
 def company_detail(company_id):
     """会社詳細（その会社の案件一覧）"""
-    company = next((c for c in SAMPLE_COMPANIES if c['id'] == company_id), None)
+    company = get_company_by_id(company_id)
     if not company:
         return "会社が見つかりません", 404
+    
+    # 会社の案件を取得
+    company_projects = [p for p in get_all_projects() if p.get('company_id') == company_id]
+    company['projects'] = company_projects
     
     return render_template(
         'company_detail.html',
@@ -1652,7 +1784,7 @@ def build_project_detail_context(project_id):
     if not project:
         return None
 
-    company = next((c for c in SAMPLE_COMPANIES if c['id'] == project.get('company_id')), None)
+    company = get_company_by_id(project.get('company_id')) if project.get('company_id') else None
 
     company_id = company['id'] if company else project.get('company_id')
     project_tasks = get_project_tasks(project_id)
@@ -1732,15 +1864,16 @@ def api_projects():
 @app.route('/api/companies')
 def api_companies():
     """会社一覧API"""
+    companies = get_all_companies()
     return jsonify({
         'status': 'success',
-        'data': SAMPLE_COMPANIES
+        'data': companies
     })
 
 @app.route('/api/companies/<int:company_id>')
 def api_company_detail(company_id):
     """会社詳細API"""
-    company = next((c for c in SAMPLE_COMPANIES if c['id'] == company_id), None)
+    company = get_company_by_id(company_id)
     if not company:
         return jsonify({'status': 'error', 'message': '会社が見つかりません'}), 404
     
@@ -1759,20 +1892,24 @@ def api_create_company():
         return jsonify({'status': 'error', 'message': '会社名と会社コードは必須です'}), 400
     
     # 会社コードの重複チェック
-    existing_company = next((c for c in SAMPLE_COMPANIES if c['code'] == data['company_code']), None)
+    existing_company = fetch_one("select * from app.companies where code=:code", code=data['company_code'])
     if existing_company:
         return jsonify({'status': 'error', 'message': 'この会社コードは既に使用されています'}), 400
     
-    # 新しい会社を作成（実際の実装ではデータベースに保存）
+    # データベースに会社を保存
+    execute("""
+        insert into app.companies (name, code, updated_at)
+        values (:name, :code, now())
+    """, name=data['company_name'], code=data['company_code'])
+    
+    # 作成された会社を取得
+    new_company_row = fetch_one("select * from app.companies where code=:code", code=data['company_code'])
     new_company = {
-        'id': len(SAMPLE_COMPANIES) + 1,
-        'name': data['company_name'],
-        'code': data['company_code'],
+        'id': new_company_row['id'],
+        'name': new_company_row['name'],
+        'code': new_company_row['code'],
         'projects': []
     }
-    
-    # サンプルデータに追加（実際の実装ではデータベースに保存）
-    SAMPLE_COMPANIES.append(new_company)
     
     # 専用管理ページのURLを生成
     management_url = f"/companies/{new_company['id']}"
@@ -1783,7 +1920,6 @@ def api_create_company():
         'data': {
             'company': new_company,
             'management_url': management_url
-            
         }
     })
 
@@ -1817,23 +1953,9 @@ def api_project_status_history(project_id):
 def api_update_project(project_id):
     """案件更新API"""
     data = request.get_json()
-    all_projects = get_all_projects()
     
-    # 案件を検索
-    project_index = None
-    company = None
-    project = None
-    
-    for c in SAMPLE_COMPANIES:
-        for idx, p in enumerate(c['projects']):
-            if p['id'] == project_id:
-                project_index = idx
-                company = c
-                project = p
-                break
-        if project:
-            break
-    
+    # データベースから案件を取得
+    project, company = get_project_by_id(project_id)
     if not project:
         return jsonify({'status': 'error', 'message': '案件が見つかりません'}), 404
     
@@ -1843,21 +1965,54 @@ def api_update_project(project_id):
     actor = g.current_user['name'] if g.current_user and g.current_user.get('name') else STATUS_HISTORY_DEFAULT_ACTOR
     previous_status = project.get('status')
     
-    # 案件を更新
-    project['name'] = new_project_name
-    project['due_date'] = data.get('due_date', project.get('due_date'))
-    project['assignee'] = data.get('assignee', project.get('assignee'))
-    project['completion_length'] = data.get('completion_length', project.get('completion_length'))
-    project['video_axis'] = data.get('video_axis', project.get('video_axis', 'LONG'))
-    project['status'] = data.get('status', project.get('status', '進行中'))
-    project['raw_material_url'] = data.get('raw_material_url', project.get('raw_material_url', ''))
-    project['final_video_url'] = data.get('final_video_url', project.get('final_video_url', ''))
-    project['script_url'] = data.get('script_url', project.get('script_url', ''))
-    project['delivery_date'] = data.get('delivery_date', project.get('delivery_date', ''))
-    project['delivered'] = data.get('delivered', project.get('delivered', False))
-
-    if company:
-        rebuild_task_cache()
+    # 進捗を計算
+    delivered = data.get('delivered', project.get('delivered', False))
+    status = data.get('status', project.get('status', '進行中'))
+    if delivered or status == '完了':
+        progress = 100
+    elif status == 'レビュー中':
+        progress = 85
+    elif status == '進行中':
+        progress = 70
+    else:
+        progress = 10
+    
+    # データベースに案件を更新
+    execute("""
+        update app.projects
+        set name = :name,
+            due_date = :due_date,
+            assignee = :assignee,
+            completion_length = :completion_length,
+            video_axis = :video_axis,
+            status = :status,
+            raw_material_url = :raw_material_url,
+            final_video_url = :final_video_url,
+            script_url = :script_url,
+            delivery_date = :delivery_date,
+            delivered = :delivered,
+            progress = :progress,
+            paid = :paid,
+            notes = :notes,
+            updated_at = now()
+        where id = :id
+    """,
+        id=project_id,
+        name=new_project_name,
+        due_date=data.get('due_date') or project.get('due_date'),
+        assignee=data.get('assignee', project.get('assignee', '')),
+        completion_length=data.get('completion_length') or project.get('completion_length'),
+        video_axis=data.get('video_axis', project.get('video_axis', 'LONG')),
+        status=status,
+        raw_material_url=data.get('raw_material_url', project.get('raw_material_url', '')),
+        final_video_url=data.get('final_video_url', project.get('final_video_url', '')),
+        script_url=data.get('script_url', project.get('script_url', '')),
+        delivery_date=data.get('delivery_date') or project.get('delivery_date'),
+        delivered=delivered,
+        progress=progress,
+        paid=data.get('paid', project.get('paid', False)),
+        notes=data.get('notes', project.get('notes', ''))
+    )
     
     # 案件名が変更された場合、関連するタスクの案件名も更新
     if old_project_name and new_project_name != old_project_name:
@@ -1866,29 +2021,16 @@ def api_update_project(project_id):
                 manual_task['project_name'] = new_project_name
         rebuild_task_cache()
     
-    # 進捗を計算（納品済みなら100%）
-    if project['delivered']:
-        project['progress'] = 100
-    elif project['status'] == '完了':
-        project['progress'] = 100
-    elif project['status'] == 'レビュー中':
-        project['progress'] = 85
-    elif project['status'] == '進行中':
-        project['progress'] = 70
-    else:
-        project['progress'] = 10
-
-    global SAMPLE_PROJECTS, PROJECT_NAME_TO_ID
-    SAMPLE_PROJECTS = get_all_projects()
-    PROJECT_NAME_TO_ID = {proj['name']: proj['id'] for proj in SAMPLE_PROJECTS}
-
-    if previous_status != project.get('status'):
-        record_project_status_change(project_id, project.get('status'), actor=actor)
+    # 更新された案件を取得
+    updated_project, _ = get_project_by_id(project_id)
+    
+    if previous_status != status:
+        record_project_status_change(project_id, status, actor=actor)
     
     return jsonify({
         'status': 'success',
         'message': '案件を更新しました',
-        'data': project
+        'data': updated_project
     })
 
 @app.route('/api/projects', methods=['POST'])
@@ -1910,40 +2052,59 @@ def api_create_project():
         return jsonify({'status': 'error', 'message': '会社IDは必須です'}), 400
     
     # 会社を検索
-    company = next((c for c in SAMPLE_COMPANIES if c['id'] == company_id), None)
+    company = get_company_by_id(company_id)
     if not company:
         return jsonify({'status': 'error', 'message': '会社が見つかりません'}), 404
     
-    # 新しい案件を作成
+    # 進捗を計算
+    status = data.get('status', '進行中')
+    delivered = data.get('delivered', False)
+    if delivered or status == '完了':
+        progress = 100
+    elif status == 'レビュー中':
+        progress = 85
+    elif status == '進行中':
+        progress = 70
+    else:
+        progress = 10
+    
+    # データベースに案件を保存
+    execute("""
+        insert into app.projects (
+            company_id, name, due_date, assignee, completion_length,
+            video_axis, status, raw_material_url, final_video_url,
+            script_url, delivery_date, delivered, progress, paid, notes
+        ) values (
+            :company_id, :name, :due_date, :assignee, :completion_length,
+            :video_axis, :status, :raw_material_url, :final_video_url,
+            :script_url, :delivery_date, :delivered, :progress, :paid, :notes
+        )
+    """,
+        company_id=company_id,
+        name=data['name'],
+        due_date=data['due_date'],
+        assignee=data['assignee'],
+        completion_length=data.get('completion_length'),
+        video_axis=video_axis,
+        status=status,
+        raw_material_url=data.get('raw_material_url', ''),
+        final_video_url=data.get('final_video_url', ''),
+        script_url=data.get('script_url', ''),
+        delivery_date=data.get('delivery_date', ''),
+        delivered=delivered,
+        progress=progress,
+        paid=data.get('paid', False),
+        notes=data.get('notes', '')
+    )
+    
+    # 作成された案件を取得
     all_projects = get_all_projects()
-    new_id = max([p['id'] for p in all_projects], default=0) + 1
+    new_project = all_projects[-1] if all_projects else None
     
-    new_project = {
-        'id': new_id,
-        'name': data['name'],
-        'due_date': data['due_date'],
-        'assignee': data['assignee'],
-        'completion_length': data.get('completion_length'),
-        'video_axis': video_axis,
-        'status': data.get('status', '進行中'),
-        'raw_material_url': data.get('raw_material_url', ''),
-        'final_video_url': data.get('final_video_url', ''),
-        'script_url': data.get('script_url', ''),
-        'delivery_date': data.get('delivery_date', ''),
-        'delivered': data.get('delivered', False),
-        'progress': 10
-    }
-    
-    # 実際の実装ではデータベースに保存
-    # ここではサンプルデータに追加
-    new_project['company_id'] = company_id
-    company['projects'].append(new_project)
-    actor = g.current_user['name'] if g.current_user and g.current_user.get('name') else STATUS_HISTORY_DEFAULT_ACTOR
-    record_project_status_change(new_project['id'], new_project.get('status', '進行中'), actor=actor)
-    rebuild_task_cache()
-    global SAMPLE_PROJECTS, PROJECT_NAME_TO_ID
-    SAMPLE_PROJECTS = get_all_projects()
-    PROJECT_NAME_TO_ID = {project['name']: project['id'] for project in SAMPLE_PROJECTS}
+    if new_project:
+        actor = g.current_user['name'] if g.current_user and g.current_user.get('name') else STATUS_HISTORY_DEFAULT_ACTOR
+        record_project_status_change(new_project['id'], status, actor=actor)
+        _sync_tasks_from_project(new_project, data['assignee'], data['due_date'], delivered)
     
     return jsonify({
         'status': 'success',
@@ -1958,24 +2119,11 @@ def api_toggle_delivered(project_id):
     delivered = data.get('delivered', False)
     actor = g.current_user['name'] if g.current_user and g.current_user.get('name') else STATUS_HISTORY_DEFAULT_ACTOR
     
-    # 案件を検索
-    project = None
-    company = None
-    
-    for c in SAMPLE_COMPANIES:
-        for p in c['projects']:
-            if p['id'] == project_id:
-                project = p
-                company = c
-                break
-        if project:
-            break
-    
+    # データベースから案件を取得
+    project, company = get_project_by_id(project_id)
     if not project:
         return jsonify({'status': 'error', 'message': '案件が見つかりません'}), 404
     
-    # 納品済み状態を更新
-    project['delivered'] = delivered
     previous_status = project.get('status')
     
     # 納品済みの場合、納品完了日を設定（24時切り替えで正確に日付を判定）
@@ -1985,25 +2133,38 @@ def api_toggle_delivered(project_id):
         now_jst = datetime.now(jst)
         
         # 日付をYYYY-MM-DD形式で取得（24時切り替えで正確に日付を判定）
-        # 例: 2025-01-15 23:59:59 → 2025-01-15
-        #     2025-01-16 00:00:00 → 2025-01-16
         delivery_date = now_jst.strftime('%Y-%m-%d')
-        
-        # CLチェック時は常に現在の日付を設定（既存の完了日を上書き）
-        project['delivery_date'] = delivery_date
-        
-        project['progress'] = 100
-        project['status'] = '完了'
-    elif not delivered:
-        project['delivery_date'] = ''
+        progress = 100
+        status = '完了'
+    else:
+        delivery_date = None
+        progress = project.get('progress', 0)
+        status = project.get('status', '進行中')
     
-    status_changed = previous_status != project.get('status')
+    # データベースに更新
+    execute("""
+        update app.projects
+        set delivered = :delivered,
+            delivery_date = :delivery_date,
+            progress = :progress,
+            status = :status,
+            updated_at = now()
+        where id = :id
+    """,
+        id=project_id,
+        delivered=delivered,
+        delivery_date=delivery_date,
+        progress=progress,
+        status=status
+    )
+    
+    status_changed = previous_status != status
     if status_changed:
         changed_at = datetime.now(pytz.timezone('Asia/Tokyo')).strftime('%Y-%m-%d %H:%M') if delivered else datetime.now().strftime('%Y-%m-%d %H:%M')
-        record_project_status_change(project_id, project.get('status'), actor=actor, changed_at=changed_at)
-
-    if company:
-        rebuild_task_cache()
+        record_project_status_change(project_id, status, actor=actor, changed_at=changed_at)
+    
+    # 更新された案件を取得
+    updated_project, _ = get_project_by_id(project_id)
     
     return jsonify({
         'status': 'success',
@@ -2556,7 +2717,7 @@ def gather_finance_report_data():
         payout_by_status[payout['status_label']]['total'] += payout['amount']
 
     companies_summary = []
-    for company in SAMPLE_COMPANIES:
+    for company in get_all_companies():
         projects = company.get('projects', [])
         completed = len([p for p in projects if p.get('status') == '完了' or p.get('delivered')])
         in_progress = len([p for p in projects if p.get('status') in {'進行中', 'レビュー中'}])
@@ -3208,7 +3369,7 @@ def editor_projects():
     return render_template(
         'projects.html',
         projects=filtered_projects,
-        companies=SAMPLE_COMPANIES,
+        companies=get_all_companies(),
         selected_company_id=company_id,
         project_detail_endpoint='editor_project_detail',
         allow_project_actions=False,
@@ -3249,7 +3410,7 @@ def editor_board():
     return render_template(
         'board.html',
         projects=all_projects,
-        companies=SAMPLE_COMPANIES,
+        companies=get_all_companies(),
         base_template='editor_layout.html'
     )
 
@@ -3304,7 +3465,7 @@ def editor_companies():
     """編集者向け会社一覧"""
     return render_template(
         'companies.html',
-        companies=SAMPLE_COMPANIES,
+        companies=get_all_companies(),
         company_detail_endpoint='editor_company_detail',
         allow_company_actions=False,
         base_template='editor_layout.html'
@@ -3316,7 +3477,7 @@ def editor_companies():
 @role_required('admin', 'editor')
 def editor_company_detail(company_id):
     """編集者向け会社詳細"""
-    company = next((c for c in SAMPLE_COMPANIES if c['id'] == company_id), None)
+    company = get_company_by_id(company_id)
     if not company:
         return "会社が見つかりません", 404
 
@@ -3563,32 +3724,56 @@ def import_csv():
                             _sync_tasks_from_project(existing_project, assignee, due_date, cl_checked)
                             imported_count += 1
                         else:
-                            # 新規案件を作成
-                            max_project_id += 1
-                            new_project = {
-                                'id': max_project_id,
-                                'name': title,
-                                'status': '完了' if cl_checked else '進行中',
-                                'due_date': due_date or '',
-                                'assignee': assignee or '未割当',
-                                'completion_length': None,
-                                'video_axis': 'LONG',
-                                'delivered': cl_checked,
-                                'delivery_date': delivery_date or '',
-                                'progress': 100 if cl_checked else 0,
-                                'raw_material_url': raw_material,
-                                'final_video_url': delivery_video,
-                                'script_url': script,
-                                'company_id': 1,  # デフォルトで最初の会社に紐付け
-                                'paid': paid,
-                                'notes': '支払い済' if paid else ''
-                            }
-                            # 会社に追加
-                            if SAMPLE_COMPANIES:
-                                SAMPLE_COMPANIES[0]['projects'].append(new_project)
+                            # 新規案件を作成（データベースに保存）
+                            # デフォルトで最初の会社に紐付け（会社がない場合は作成）
+                            companies = get_all_companies()
+                            if not companies:
+                                # デフォルト会社を作成
+                                execute("""
+                                    insert into app.companies (name, code, updated_at)
+                                    values (:name, :code, now())
+                                """, name='デフォルト会社', code='DEFAULT')
+                                companies = get_all_companies()
+                            company_id = companies[0]['id'] if companies else 1
                             
-                            # タスクを自動生成
-                            _sync_tasks_from_project(new_project, assignee, due_date, cl_checked)
+                            # データベースに案件を保存
+                            execute("""
+                                insert into app.projects (
+                                    company_id, name, status, due_date, assignee,
+                                    completion_length, video_axis, delivered, delivery_date,
+                                    progress, raw_material_url, final_video_url, script_url,
+                                    paid, notes
+                                ) values (
+                                    :company_id, :name, :status, :due_date, :assignee,
+                                    :completion_length, :video_axis, :delivered, :delivery_date,
+                                    :progress, :raw_material_url, :final_video_url, :script_url,
+                                    :paid, :notes
+                                )
+                            """,
+                                company_id=company_id,
+                                name=title,
+                                status='完了' if cl_checked else '進行中',
+                                due_date=due_date or None,
+                                assignee=assignee or '未割当',
+                                completion_length=None,
+                                video_axis='LONG',
+                                delivered=cl_checked,
+                                delivery_date=delivery_date or None,
+                                progress=100 if cl_checked else 0,
+                                raw_material_url=raw_material,
+                                final_video_url=delivery_video,
+                                script_url=script,
+                                paid=paid,
+                                notes='支払い済' if paid else ''
+                            )
+                            
+                            # 作成された案件を取得
+                            all_projects = get_all_projects()
+                            new_project = all_projects[-1] if all_projects else None
+                            
+                            if new_project:
+                                # タスクを自動生成
+                                _sync_tasks_from_project(new_project, assignee, due_date, cl_checked)
                             imported_count += 1
                     else:
                         skipped_count += 1
@@ -3616,29 +3801,50 @@ def import_csv():
                     except:
                         completion_length_int = None
                     
-                    max_project_id += 1
-                    new_project = {
-                        'id': max_project_id,
-                        'name': title,
-                        'status': '完了' if delivered else '進行中',
-                        'due_date': due_date or '',
-                        'assignee': assignee or '未割当',
-                        'completion_length': completion_length_int,
-                        'video_axis': 'LONG',
-                        'delivered': delivered,
-                        'delivery_date': '',
-                        'progress': 100 if delivered else 0,
-                        'raw_material_url': raw_material,
-                        'final_video_url': delivery_video,
-                        'script_url': '',
-                        'company_id': 1
-                    }
+                    # デフォルトで最初の会社に紐付け（会社がない場合は作成）
+                    companies = get_all_companies()
+                    if not companies:
+                        execute("""
+                            insert into app.companies (name, code, updated_at)
+                            values (:name, :code, now())
+                        """, name='デフォルト会社', code='DEFAULT')
+                        companies = get_all_companies()
+                    company_id = companies[0]['id'] if companies else 1
                     
-                    if SAMPLE_COMPANIES:
-                        SAMPLE_COMPANIES[0]['projects'].append(new_project)
+                    # データベースに案件を保存
+                    execute("""
+                        insert into app.projects (
+                            company_id, name, status, due_date, assignee,
+                            completion_length, video_axis, delivered, delivery_date,
+                            progress, raw_material_url, final_video_url, script_url
+                        ) values (
+                            :company_id, :name, :status, :due_date, :assignee,
+                            :completion_length, :video_axis, :delivered, :delivery_date,
+                            :progress, :raw_material_url, :final_video_url, :script_url
+                        )
+                    """,
+                        company_id=company_id,
+                        name=title,
+                        status='完了' if delivered else '進行中',
+                        due_date=due_date or None,
+                        assignee=assignee or '未割当',
+                        completion_length=completion_length_int,
+                        video_axis='LONG',
+                        delivered=delivered,
+                        delivery_date=None,
+                        progress=100 if delivered else 0,
+                        raw_material_url=raw_material,
+                        final_video_url=delivery_video,
+                        script_url=''
+                    )
                     
-                    # タスクを自動生成
-                    _sync_tasks_from_project(new_project, assignee, due_date, delivered)
+                    # 作成された案件を取得
+                    all_projects = get_all_projects()
+                    new_project = all_projects[-1] if all_projects else None
+                    
+                    if new_project:
+                        # タスクを自動生成
+                        _sync_tasks_from_project(new_project, assignee, due_date, delivered)
                     imported_count += 1
                 
                 elif import_type == 'submission':
@@ -3699,30 +3905,54 @@ def import_csv():
                             _sync_tasks_from_project(existing_project, assignee, due_date, cl_checked)
                             imported_count += 1
                         else:
-                            max_project_id += 1
-                            new_project = {
-                                'id': max_project_id,
-                                'name': title,
-                                'status': '完了' if cl_checked else '進行中',
-                                'due_date': due_date or '',
-                                'assignee': assignee or '未割当',
-                                'completion_length': None,
-                                'video_axis': 'LONG',
-                                'delivered': cl_checked,
-                                'delivery_date': delivery_date or '',
-                                'progress': 100 if cl_checked else 0,
-                                'raw_material_url': raw_material,
-                                'final_video_url': delivery_video,
-                                'script_url': script,
-                                'company_id': 1,
-                                'paid': paid,
-                                'notes': '支払い済' if paid else ''
-                            }
-                            if SAMPLE_COMPANIES:
-                                SAMPLE_COMPANIES[0]['projects'].append(new_project)
+                            # デフォルトで最初の会社に紐付け（会社がない場合は作成）
+                            companies = get_all_companies()
+                            if not companies:
+                                execute("""
+                                    insert into app.companies (name, code, updated_at)
+                                    values (:name, :code, now())
+                                """, name='デフォルト会社', code='DEFAULT')
+                                companies = get_all_companies()
+                            company_id = companies[0]['id'] if companies else 1
                             
-                            # タスクを自動生成
-                            _sync_tasks_from_project(new_project, assignee, due_date, cl_checked)
+                            # データベースに案件を保存
+                            execute("""
+                                insert into app.projects (
+                                    company_id, name, status, due_date, assignee,
+                                    completion_length, video_axis, delivered, delivery_date,
+                                    progress, raw_material_url, final_video_url, script_url,
+                                    paid, notes
+                                ) values (
+                                    :company_id, :name, :status, :due_date, :assignee,
+                                    :completion_length, :video_axis, :delivered, :delivery_date,
+                                    :progress, :raw_material_url, :final_video_url, :script_url,
+                                    :paid, :notes
+                                )
+                            """,
+                                company_id=company_id,
+                                name=title,
+                                status='完了' if cl_checked else '進行中',
+                                due_date=due_date or None,
+                                assignee=assignee or '未割当',
+                                completion_length=None,
+                                video_axis='LONG',
+                                delivered=cl_checked,
+                                delivery_date=delivery_date or None,
+                                progress=100 if cl_checked else 0,
+                                raw_material_url=raw_material,
+                                final_video_url=delivery_video,
+                                script_url=script,
+                                paid=paid,
+                                notes='支払い済' if paid else ''
+                            )
+                            
+                            # 作成された案件を取得
+                            all_projects = get_all_projects()
+                            new_project = all_projects[-1] if all_projects else None
+                            
+                            if new_project:
+                                # タスクを自動生成
+                                _sync_tasks_from_project(new_project, assignee, due_date, cl_checked)
                             imported_count += 1
                     else:
                         skipped_count += 1
