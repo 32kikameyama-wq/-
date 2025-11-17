@@ -8,7 +8,7 @@
     <section class="projects-header">
         <div class="header-top">
             <div>
-                <h2>案件一覧</h2>
+                <h2>{% if selected_video_axis == 'SHORT' %}ショート動画{% else %}ロング動画{% endif %}</h2>
                 <p class="subtitle">全{{ projects|length }}件の案件</p>
             </div>
             {% if allow_project_actions|default(True) %}
