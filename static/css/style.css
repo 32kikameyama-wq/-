@@ -1711,6 +1711,8 @@ section h3 {
     border-radius: 8px;
     border: 1px solid #000;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    width: 100%;
+    max-width: 100%;
 }
 
 /* 必要に応じて横スクロールを表示 */
@@ -1743,9 +1745,10 @@ section h3 {
 
 .projects-table {
     width: 100%;
+    min-width: 1400px;
     border-collapse: collapse;
     font-size: 0.8em;
-    table-layout: fixed;
+    table-layout: auto;
 }
 
 .projects-table thead {
