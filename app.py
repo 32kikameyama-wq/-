@@ -1080,9 +1080,6 @@ def record_task_history(task: dict, field: str, old_value, new_value, actor: str
         'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M')
     }
     task['history'].insert(0, entry)
-    # 履歴が多すぎる場合は古いものを削除（最新100件まで保持）
-    if len(task['history']) > 100:
-        task['history'] = task['history'][:100]
 
 
 def update_task_metadata(task: dict, actor: str):
@@ -1140,9 +1137,6 @@ def record_project_status_change(project_id: int, new_status: str, actor: str = 
         'changed_by': actor
     }
     history.append(entry)
-    # 履歴を最新順に保つ（古いものから最大100件残す）
-    if len(history) > 100:
-        del history[:-100]
 
 
 def ensure_project_status_history(project: dict, actor: str = STATUS_HISTORY_DEFAULT_ACTOR):

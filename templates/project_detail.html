@@ -251,10 +251,17 @@
     <section id="tab-history" class="tab-content">
         <div class="history-header">
             <h3>履歴</h3>
+            <div class="history-filter-section" style="margin-top: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <label for="history-start-date" style="font-weight: normal;">開始日:</label>
+                <input type="date" id="history-start-date" class="history-date-filter" onchange="filterHistory()">
+                <label for="history-end-date" style="font-weight: normal;">終了日:</label>
+                <input type="date" id="history-end-date" class="history-date-filter" onchange="filterHistory()">
+                <button class="btn btn-secondary" onclick="resetHistoryFilter()" style="padding: 5px 15px; font-size: 0.9em;">リセット</button>
+            </div>
         </div>
-        <div class="history-list">
+        <div class="history-list" id="history-list">
             {% for h in history %}
-            <div class="history-item">
+            <div class="history-item" data-history-date="{{ h.timestamp.split(' ')[0] if ' ' in h.timestamp else h.timestamp }}">
                 <div class="history-action">{{ h.action }}</div>
                 <div class="history-meta">
                     <span class="history-user">{{ h.user }}</span>
@@ -602,6 +609,65 @@ function addComment() {
         console.error(error);
         alert('コメント追加中にエラーが発生しました');
     });
+}
+
+// 履歴の期間フィルター機能
+function filterHistory() {
+    const startDate = document.getElementById('history-start-date').value;
+    const endDate = document.getElementById('history-end-date').value;
+    const historyItems = document.querySelectorAll('#history-list .history-item');
+    
+    let visibleCount = 0;
+    
+    historyItems.forEach(item => {
+        const historyDate = item.getAttribute('data-history-date');
+        if (!historyDate) {
+            item.style.display = 'none';
+            return;
+        }
+        
+        let show = true;
+        
+        if (startDate && historyDate < startDate) {
+            show = false;
+        }
+        if (endDate && historyDate > endDate) {
+            show = false;
+        }
+        
+        if (show) {
+            item.style.display = '';
+            visibleCount++;
+        } else {
+            item.style.display = 'none';
+        }
+    });
+    
+    // 表示件数を更新
+    const historyList = document.getElementById('history-list');
+    let countInfo = historyList.querySelector('.history-count-info');
+    if (!countInfo) {
+        countInfo = document.createElement('p');
+        countInfo.className = 'history-count-info';
+        countInfo.style.marginTop = '10px';
+        countInfo.style.color = '#666';
+        countInfo.style.fontSize = '0.9em';
+        historyList.appendChild(countInfo);
+    }
+    
+    const totalCount = historyItems.length;
+    if (startDate || endDate) {
+        countInfo.textContent = `表示: ${visibleCount}件 / 全${totalCount}件`;
+        countInfo.style.display = 'block';
+    } else {
+        countInfo.style.display = 'none';
+    }
+}
+
+function resetHistoryFilter() {
+    document.getElementById('history-start-date').value = '';
+    document.getElementById('history-end-date').value = '';
+    filterHistory();
 }
 </script>
 {% endblock %}
