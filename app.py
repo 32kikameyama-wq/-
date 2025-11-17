@@ -1831,11 +1831,16 @@ def build_project_detail_context(project_id):
 
     comments = copy.deepcopy(ensure_project_comments(project_id))
 
-    history = [
-        {'id': 1, 'action': '案件作成', 'user': 'テスト', 'timestamp': '2025-03-15 09:00'},
-        {'id': 2, 'action': 'ステータス変更: 計画中 → 進行中', 'user': 'テスト', 'timestamp': '2025-03-20 10:30'},
-        {'id': 3, 'action': '担当者変更', 'user': 'テスト', 'timestamp': '2025-04-01 11:00'},
-    ]
+    # 実際のプロジェクトステータス履歴を取得
+    status_history = get_project_status_history(project_id)
+    history = []
+    for entry in status_history:
+        history.append({
+            'id': entry.get('id', len(history) + 1),
+            'action': f"ステータス変更: {entry.get('status', '')}",
+            'user': entry.get('changed_by', 'システム'),
+            'timestamp': entry.get('changed_at', '')
+        })
 
     project_assets = [a for a in SAMPLE_ASSETS if a.get('project_id') == project_id]
     if not project_assets:
