@@ -64,7 +64,7 @@
                             <div class="action-buttons">
                                 <a href="{{ url_for(company_detail_endpoint, company_id=company.id) }}" class="btn-link btn-link-small">詳細</a>
                                 {% if allow_company_actions|default(True) %}
-                                <button class="btn-link btn-link-small" onclick="editCompany({{ company.id }}, '{{ company.name }}', '{{ company.code }}')">編集</button>
+                                <button class="btn-link btn-link-small" onclick="editCompany({{ company.id }}, '{{ company.name|replace("'", "\\'") }}', '{{ company.code|replace("'", "\\'") }}')">編集</button>
                                 {% endif %}
                             </div>
                         </td>
@@ -76,63 +76,18 @@
     </section>
 </div>
 
-<!-- 会社編集モーダル -->
-<div id="edit-company-modal" class="gantt-modal" style="display: none;">
-    <div class="gantt-modal-overlay" onclick="closeEditCompanyModal()"></div>
-    <div class="gantt-modal-content">
-        <div class="gantt-modal-header">
-            <h3>会社情報を編集</h3>
-            <button class="gantt-modal-close" onclick="closeEditCompanyModal()">×</button>
-        </div>
-        <div class="gantt-modal-body">
-            <form id="edit-company-form">
-                <input type="hidden" id="edit-company-id">
-                <div class="form-group">
-                    <label for="edit-company-name">会社名 <span class="required">*</span></label>
-                    <input type="text" id="edit-company-name" class="form-control" required>
-                </div>
-                <div class="form-group">
-                    <label for="edit-company-code">会社コード</label>
-                    <input type="text" id="edit-company-code" class="form-control">
-                </div>
-                <div id="edit-company-result" class="import-result" style="display: none; margin-top: 15px;"></div>
-            </form>
-        </div>
-        <div class="gantt-modal-footer">
-            <button type="button" class="btn btn-secondary" onclick="closeEditCompanyModal()">キャンセル</button>
-            <button type="button" class="btn btn-primary" onclick="submitEditCompany()">更新</button>
-        </div>
-    </div>
-</div>
-
 <script>
-function editCompany(companyId, companyName, companyCode) {
-    document.getElementById('edit-company-id').value = companyId;
-    document.getElementById('edit-company-name').value = companyName;
-    document.getElementById('edit-company-code').value = companyCode || '';
-    document.getElementById('edit-company-result').style.display = 'none';
-    document.getElementById('edit-company-modal').style.display = 'flex';
-}
-
-function closeEditCompanyModal() {
-    document.getElementById('edit-company-modal').style.display = 'none';
-    document.getElementById('edit-company-form').reset();
-    document.getElementById('edit-company-result').style.display = 'none';
-}
-
-function submitEditCompany() {
-    const companyId = document.getElementById('edit-company-id').value;
-    const companyName = document.getElementById('edit-company-name').value.trim();
-    const companyCode = document.getElementById('edit-company-code').value.trim();
-    const resultDiv = document.getElementById('edit-company-result');
-    
-    if (!companyName) {
-        alert('会社名を入力してください');
+// 会社編集
+function editCompany(companyId, currentName, currentCode) {
+    const newName = prompt('会社名を入力してください:', currentName);
+    if (newName === null || newName.trim() === '') {
         return;
     }
     
-    resultDiv.style.display = 'block';
-    resultDiv.innerHTML = '<p>更新中...</p>';
+    const newCode = prompt('会社コードを入力してください（任意）:', currentCode || '');
+    if (newCode === null) {
+        return;
+    }
     
     fetch(`/api/companies/${companyId}`, {
         method: 'PUT',
@@ -140,39 +95,22 @@ function submitEditCompany() {
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            company_name: companyName,
-            company_code: companyCode
+            company_name: newName.trim(),
+            company_code: newCode.trim() || null
         })
     })
     .then(response => response.json())
     .then(result => {
         if (result.status === 'success') {
-            resultDiv.innerHTML = `
-                <div class="success-message">
-                    <h4>更新成功</h4>
-                    <p>${result.message}</p>
-                </div>
-            `;
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
+            alert('会社情報を更新しました');
+            window.location.reload();
         } else {
-            resultDiv.innerHTML = `
-                <div class="error-message">
-                    <h4>エラーが発生しました</h4>
-                    <p>${result.message}</p>
-                </div>
-            `;
+            alert('エラー: ' + result.message);
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        resultDiv.innerHTML = `
-            <div class="error-message">
-                <h4>エラーが発生しました</h4>
-                <p>更新中にエラーが発生しました。もう一度お試しください。</p>
-            </div>
-        `;
+        alert('会社情報の更新中にエラーが発生しました。');
     });
 }
 </script>

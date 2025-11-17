@@ -11,19 +11,15 @@
         <div class="back-link">
             <a href="{{ company_list_url }}">← 会社一覧に戻る</a>
         </div>
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <h2>{{ company.name }}</h2>
-                <div class="company-meta">
-                    <span class="company-code">{{ company.code }}</span>
-                    <span class="meta-item">案件数: {{ company.projects|length }}件</span>
-                </div>
-            </div>
+        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+            <h2 id="company-name-display">{{ company.name }}</h2>
             {% if allow_company_actions|default(True) %}
-            <div>
-                <button class="btn btn-secondary" onclick="editCompany({{ company.id }}, '{{ company.name }}', '{{ company.code }}')">会社情報を編集</button>
-            </div>
+            <button class="btn btn-secondary" onclick="editCompany({{ company.id }})">会社名を編集</button>
             {% endif %}
+        </div>
+        <div class="company-meta">
+            <span class="company-code" id="company-code-display">{{ company.code }}</span>
+            <span class="meta-item">案件数: {{ company.projects|length }}件</span>
         </div>
     </section>
 
@@ -111,6 +107,7 @@
 <script>
 // 会社一覧をグローバル変数に設定（JavaScriptで使用）
 window.companies = [{{ company|tojson }}];
+window.currentCompany = {{ company|tojson }};
 
 // CLチェックボックスの切り替え
 function toggleCL(projectId, isChecked) {
@@ -159,6 +156,44 @@ function editProject(projectId) {
             console.error('Error:', error);
             alert('案件データの取得中にエラーが発生しました。');
         });
+}
+
+// 会社編集
+function editCompany(companyId) {
+    const company = window.currentCompany;
+    const newName = prompt('会社名を入力してください:', company.name);
+    if (newName === null || newName.trim() === '') {
+        return;
+    }
+    
+    const newCode = prompt('会社コードを入力してください（任意）:', company.code || '');
+    if (newCode === null) {
+        return;
+    }
+    
+    fetch(`/api/companies/${companyId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            company_name: newName.trim(),
+            company_code: newCode.trim() || null
+        })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.status === 'success') {
+            alert('会社情報を更新しました');
+            window.location.reload();
+        } else {
+            alert('エラー: ' + result.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('会社情報の更新中にエラーが発生しました。');
+    });
 }
 </script>
 {% endblock %}

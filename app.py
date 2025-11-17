@@ -1882,47 +1882,6 @@ def api_company_detail(company_id):
         'data': company
     })
 
-@app.route('/api/companies', methods=['POST'])
-def api_create_company():
-    """会社登録API"""
-    data = request.get_json()
-    
-    # バリデーション
-    if not data.get('company_name') or not data.get('company_code'):
-        return jsonify({'status': 'error', 'message': '会社名と会社コードは必須です'}), 400
-    
-    # 会社コードの重複チェック
-    existing_company = fetch_one("select * from app.companies where code=:code", code=data['company_code'])
-    if existing_company:
-        return jsonify({'status': 'error', 'message': 'この会社コードは既に使用されています'}), 400
-    
-    # データベースに会社を保存
-    execute("""
-        insert into app.companies (name, code, updated_at)
-        values (:name, :code, now())
-    """, name=data['company_name'], code=data['company_code'])
-    
-    # 作成された会社を取得
-    new_company_row = fetch_one("select * from app.companies where code=:code", code=data['company_code'])
-    new_company = {
-        'id': new_company_row['id'],
-        'name': new_company_row['name'],
-        'code': new_company_row['code'],
-        'projects': []
-    }
-    
-    # 専用管理ページのURLを生成
-    management_url = f"/companies/{new_company['id']}"
-    
-    return jsonify({
-        'status': 'success',
-        'message': '会社が登録されました。専用の管理ページが作成されました。',
-        'data': {
-            'company': new_company,
-            'management_url': management_url
-        }
-    })
-
 @app.route('/api/companies/<int:company_id>', methods=['PUT'])
 @login_required
 @role_required('admin')
@@ -1967,6 +1926,47 @@ def api_update_company(company_id):
         'status': 'success',
         'message': '会社情報を更新しました',
         'data': updated_company
+    })
+
+@app.route('/api/companies', methods=['POST'])
+def api_create_company():
+    """会社登録API"""
+    data = request.get_json()
+    
+    # バリデーション
+    if not data.get('company_name') or not data.get('company_code'):
+        return jsonify({'status': 'error', 'message': '会社名と会社コードは必須です'}), 400
+    
+    # 会社コードの重複チェック
+    existing_company = fetch_one("select * from app.companies where code=:code", code=data['company_code'])
+    if existing_company:
+        return jsonify({'status': 'error', 'message': 'この会社コードは既に使用されています'}), 400
+    
+    # データベースに会社を保存
+    execute("""
+        insert into app.companies (name, code, updated_at)
+        values (:name, :code, now())
+    """, name=data['company_name'], code=data['company_code'])
+    
+    # 作成された会社を取得
+    new_company_row = fetch_one("select * from app.companies where code=:code", code=data['company_code'])
+    new_company = {
+        'id': new_company_row['id'],
+        'name': new_company_row['name'],
+        'code': new_company_row['code'],
+        'projects': []
+    }
+    
+    # 専用管理ページのURLを生成
+    management_url = f"/companies/{new_company['id']}"
+    
+    return jsonify({
+        'status': 'success',
+        'message': '会社が登録されました。専用の管理ページが作成されました。',
+        'data': {
+            'company': new_company,
+            'management_url': management_url
+        }
     })
 
 @app.route('/api/projects/<int:project_id>')
