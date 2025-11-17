@@ -331,9 +331,14 @@ function submitProjectsCsvImport() {
         return;
     }
     
+    // 現在のページの動画種類を取得（URLパラメータから）
+    const urlParams = new URLSearchParams(window.location.search);
+    const videoAxis = urlParams.get('video_axis') || 'LONG';
+    
     formData.append('csv_file', fileInput.files[0]);
     formData.append('import_type', importType);
     formData.append('company_id', companyId);
+    formData.append('video_axis', videoAxis);
     
     resultDiv.style.display = 'block';
     resultDiv.innerHTML = '<p>インポート中...</p>';

@@ -1,6 +1,10 @@
 // 案件追加フォームのJavaScript
 
 function addProject(companyId = null) {
+    // 現在のページの動画種類を取得（URLパラメータから）
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentVideoAxis = urlParams.get('video_axis') || 'LONG';
+    
     // モーダルまたはフォームを表示
     const form = document.createElement('div');
     form.className = 'project-form-modal';
@@ -45,8 +49,8 @@ function addProject(companyId = null) {
                         <div class="form-group">
                             <label for="video_axis">区分 *</label>
                             <select id="video_axis" name="video_axis" required>
-                                <option value="LONG">LONG（長尺）</option>
-                                <option value="SHORT">SHORT（ショート）</option>
+                                <option value="LONG" ${currentVideoAxis === 'LONG' ? 'selected' : ''}>LONG（長尺）</option>
+                                <option value="SHORT" ${currentVideoAxis === 'SHORT' ? 'selected' : ''}>SHORT（ショート）</option>
                             </select>
                         </div>
                     </div>

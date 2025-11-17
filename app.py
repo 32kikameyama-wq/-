@@ -3773,6 +3773,11 @@ def import_csv():
     file = request.files['csv_file']
     import_type = request.form.get('import_type', 'projects')
     company_id = request.form.get('company_id', '').strip()
+    video_axis = request.form.get('video_axis', 'LONG').strip()
+    
+    # 動画種類のバリデーション
+    if video_axis not in ['LONG', 'SHORT']:
+        video_axis = 'LONG'
     
     # 会社IDのバリデーション
     if not company_id:
