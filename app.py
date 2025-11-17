@@ -3886,6 +3886,7 @@ def import_csv():
                                     paid = :paid,
                                     notes = :notes,
                                     company_id = :company_id,
+                                    video_axis = :video_axis,
                                     updated_at = now()
                                 where id = :id
                             """,
@@ -3901,7 +3902,8 @@ def import_csv():
                                 progress=progress,
                                 paid=paid,
                                 notes=notes,
-                                company_id=company_id_int
+                                company_id=company_id_int,
+                                video_axis=video_axis
                             )
                             
                             # 更新された案件を取得
@@ -3948,7 +3950,7 @@ def import_csv():
                                 due_date=due_date or None,
                                 assignee=assignee or '未割当',
                                 completion_length=None,
-                                video_axis='LONG',
+                                video_axis=video_axis,
                                 delivered=cl_checked,
                                 delivery_date=delivery_date or None,
                                 progress=progress,
@@ -4128,6 +4130,7 @@ def import_csv():
                                     paid = :paid,
                                     notes = :notes,
                                     company_id = :company_id,
+                                    video_axis = :video_axis,
                                     updated_at = now()
                                 where id = :id
                             """,
@@ -4143,7 +4146,8 @@ def import_csv():
                                 progress=progress,
                                 paid=paid,
                                 notes=notes,
-                                company_id=company_id_int
+                                company_id=company_id_int,
+                                video_axis=video_axis
                             )
                             
                             # 更新された案件を取得
