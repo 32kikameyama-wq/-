@@ -3748,7 +3748,7 @@ def import_csv():
         for row in reader:
             try:
                 if import_type == 'projects':
-                    # 案件管理シート形式: ID、企画タイトル、動画素材、完成動画、台本、納期、担当、CL✓/CL✔、納品完了日、支払い済
+                    # 案件管理シート形式: ID、企画タイトル、動画素材、完成動画、台本、納期、担当、CL✓/CL✔、納品完了日、支払い済、ステータス
                     # 列名のバリエーションに対応（動画担当/担当、元素材/動画素材、納品動画/完成動画、CL✔/CL✓）
                     due_date = parse_japanese_date(row.get('納期', ''))
                     project_id = row.get('ID', '').strip()
@@ -3764,6 +3764,11 @@ def import_csv():
                     script = row.get('台本', '').strip()
                     delivery_date = parse_japanese_date(row.get('納品完了日', ''))
                     paid = parse_checkbox(row.get('支払い済', ''))
+                    # ステータス列を読み込む（CSVに含まれている場合）
+                    status = row.get('ステータス', '').strip()
+                    if not status or status not in ['計画中', '進行中', 'レビュー中', '完了']:
+                        # ステータスが無効または未指定の場合は、CLチェック状態から推測
+                        status = '完了' if cl_checked else '進行中'
                     
                     if not title:
                         skipped_count += 1
@@ -3942,7 +3947,7 @@ def import_csv():
                     continue
                 
                 elif import_type == 'projects_alt':
-                    # 案件管理シート（別形式）: ID、企画タイトル、納期、担当、CL✔、動画素材、完成動画、台本、納品完了日、支払い済
+                    # 案件管理シート（別形式）: ID、企画タイトル、納期、担当、CL✔、動画素材、完成動画、台本、納品完了日、支払い済、ステータス
                     project_id = row.get('ID', '').strip()
                     title = row.get('企画タイトル', '').strip()
                     due_date = parse_japanese_date(row.get('納期', ''))
@@ -3953,6 +3958,11 @@ def import_csv():
                     script = row.get('台本', '').strip()
                     delivery_date = parse_japanese_date(row.get('納品完了日', ''))
                     paid = parse_checkbox(row.get('支払い済', ''))
+                    # ステータス列を読み込む（CSVに含まれている場合）
+                    status = row.get('ステータス', '').strip()
+                    if not status or status not in ['計画中', '進行中', 'レビュー中', '完了']:
+                        # ステータスが無効または未指定の場合は、CLチェック状態から推測
+                        status = '完了' if cl_checked else '進行中'
                     
                     if not title:
                         skipped_count += 1
